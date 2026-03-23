@@ -14,6 +14,9 @@ from daylife.api.routes.categories import router as categories_router
 from daylife.api.routes.import_routes import router as import_router
 from daylife.api.routes.classify import router as classify_router
 from daylife.api.routes.github import router as github_router
+from daylife.api.routes.reports import router as reports_router
+from daylife.api.routes.tags import router as tags_router
+from daylife.api.routes.voice import router as voice_router
 from daylife.core.database import init_db
 
 # 前端静态文件目录
@@ -55,6 +58,9 @@ def create_app() -> FastAPI:
     app.include_router(import_router, prefix="/api/import", tags=["import"])
     app.include_router(classify_router, prefix="/api/classify", tags=["classify"])
     app.include_router(github_router, prefix="/api/github", tags=["github"])
+    app.include_router(reports_router, prefix="/api/reports", tags=["reports"])
+    app.include_router(tags_router, prefix="/api/tags", tags=["tags"])
+    app.include_router(voice_router, prefix="/api/voice", tags=["voice"])
 
     @app.get("/api/health")
     def health():

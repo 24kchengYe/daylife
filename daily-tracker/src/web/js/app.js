@@ -92,6 +92,8 @@ const App = {
             Calendar.loadHeatmapYear(parseInt(document.getElementById('heatmap-year')?.value || Calendar.currentYear));
         }
         if (view === 'search') document.getElementById('search-input')?.focus();
+        if (view === 'reports') this.loadReportTree();
+        if (view === 'tags') this.loadTags();
         if (view === 'import') this.loadImportHistory();
     },
 
@@ -230,6 +232,7 @@ const App = {
 
         form.querySelector('[name="content"]').value = entry?.content || '';
         form.querySelector('[name="is_done"]').checked = entry?.status === 'completed';
+        form.querySelector('[name="tags"]').value = entry?.tags?.map(t => t.name).join(', ') || '';
         form.querySelector('[name="notes"]').value = entry?.notes || '';
         form.querySelector('[name="date"]').value = dateStr || this.selectedDate;
         form.dataset.entryId = entry?.id || '';
@@ -238,10 +241,13 @@ const App = {
             e.preventDefault();
             const fd = new FormData(form);
             const isDone = form.querySelector('[name="is_done"]').checked;
+            const tagsRaw = fd.get('tags') || '';
+            const tagsArr = tagsRaw.split(/[,，]/).map(t => t.trim()).filter(Boolean);
             const payload = {
                 date: fd.get('date'), content: fd.get('content'),
                 category: fd.get('category') || null,
                 status: isDone ? 'completed' : 'in_progress',
+                tags: tagsArr,
                 notes: fd.get('notes') || null, source: 'web',
             };
             if (form.dataset.entryId) { await API.updateEntry(parseInt(form.dataset.entryId), payload); this.toast('已更新'); }
@@ -688,6 +694,435 @@ const App = {
                 <td>${r.date_range_start||'?'} ~ ${r.date_range_end||'?'}</td>
             </tr>`).join('')}</tbody>
         </table>`;
+    },
+
+    // ══════════════════════════════════════════════════
+    // ── Reports ──
+    // ══════════════════════════════════════════════════
+    async loadReportTree() {
+        const tree = await API.getReportTree();
+        const el = document.getElementById('report-tree');
+        if (!el) return;
+        if (!tree || !tree.length) {
+            el.innerHTML = '<div class="empty-state">暂无数据</div>';
+            return;
+        }
+        el.innerHTML = tree.map(year => this._renderTreeNode(year, 0)).join('');
+    },
+
+    _renderTreeNode(node, depth) {
+        const hasChildren = node.children && node.children.length > 0;
+        const indent = depth * 16;
+        const statusIcon = node.has_report ? '<span class="tree-status tree-done">V</span>' : '<span class="tree-status tree-pending">-</span>';
+        const btnLabel = node.has_report ? '查看' : '生成';
+        const btnClass = node.has_report ? 'btn-ghost' : 'btn-primary';
+        const dateRange = node.date_range ? `<span class="tree-date-range">${node.date_range}</span>` : '';
+
+        let html = `<div class="tree-node" style="padding-left:${indent}px">
+            <div class="tree-node-header">
+                ${hasChildren ? `<span class="tree-toggle" onclick="App.toggleTreeNode(this)">&#9654;</span>` : '<span class="tree-toggle-spacer"></span>'}
+                ${statusIcon}
+                <span class="tree-label">${node.label}</span>
+                ${dateRange}
+                <button class="btn btn-xs ${btnClass}" onclick="App.onReportAction('${node.type}','${node.key}',${node.has_report})">${btnLabel}</button>
+                ${node.has_report ? `<button class="btn btn-xs" onclick="if(confirm('重新生成？'))App.onReportAction('${node.type}','${node.key}',false,true)">重新生成</button>` : ''}
+                ${node.has_report && !node.formatted ? `<button class="btn btn-xs btn-accent" onclick="App.formatOneReport('${node.key}')">整理格式</button>` : ''}
+            </div>`;
+
+        if (hasChildren) {
+            html += `<div class="tree-children" style="display:none">`;
+            html += node.children.map(c => this._renderTreeNode(c, depth + 1)).join('');
+            html += `</div>`;
+        }
+        html += `</div>`;
+        return html;
+    },
+
+    toggleTreeNode(toggleEl) {
+        const node = toggleEl.closest('.tree-node');
+        const children = node.querySelector('.tree-children');
+        if (!children) return;
+        const hidden = children.style.display === 'none';
+        children.style.display = hidden ? 'block' : 'none';
+        toggleEl.innerHTML = hidden ? '&#9660;' : '&#9654;';
+    },
+
+    async onReportAction(type, key, hasReport, force = false) {
+        const display = document.getElementById('report-display');
+        if (hasReport && !force) {
+            display.innerHTML = '<div class="loading">加载中...</div>';
+            const report = await API.getReport(key);
+            if (report) {
+                this._renderReport(report);
+            } else {
+                display.innerHTML = '<div class="empty-state">报告不存在</div>';
+            }
+        } else {
+            display.innerHTML = '<div class="loading">AI 生成报告中，请稍候...</div>';
+            const report = await API.generateReport(type, key, force);
+            if (report) {
+                this._renderReport(report);
+                this.loadReportTree();
+            } else {
+                display.innerHTML = '<div class="empty-state">生成失败，请重试</div>';
+            }
+        }
+    },
+
+    _currentReport: null,
+
+    _renderReport(report) {
+        this._currentReport = report;
+        const display = document.getElementById('report-display');
+        const html = typeof marked !== 'undefined' ? marked.parse(report.content) : report.content.replace(/\n/g, '<br>');
+        const formattedBadge = report.formatted ? '<span style="color:var(--accent);font-size:11px;margin-left:6px">[已格式化]</span>' : '';
+        display.innerHTML = `
+            <div class="report-header">
+                <h2 class="report-title">${this.esc(report.title || report.period_key)}${formattedBadge}</h2>
+                <div class="report-meta">
+                    <span>${report.period_key}</span>
+                    <span>${report.date_from} ~ ${report.date_to}</span>
+                    <span>${report.entry_count} 条记录</span>
+                    ${report.model_used ? `<span>模型: ${report.model_used}</span>` : ''}
+                </div>
+                <div style="margin-top:8px;display:flex;gap:6px">
+                    ${!report.formatted ? `<button class="btn btn-xs btn-accent" onclick="App.formatOneReport('${report.period_key}')">整理格式</button>` : ''}
+                    <button class="btn btn-xs btn-primary" onclick="App.showWordCloud('${report.period_type}','${report.period_key}')">生成词云</button>
+                </div>
+            </div>
+            <div class="report-body markdown-body">${html}</div>
+            <div id="wordcloud-container" style="margin-top:16px;text-align:center"></div>`;
+    },
+
+    _reportGenStopped: false,
+
+    async generateAllReports() {
+        this._reportGenStopped = false;
+        const progressDiv = document.getElementById('report-gen-progress');
+        const fillEl = document.getElementById('report-progress-fill');
+        const textEl = document.getElementById('report-progress-text');
+        progressDiv.style.display = '';
+
+        // 按钮切换为暂停
+        const btn = document.querySelector('[onclick="App.generateAllReports()"]');
+        if (btn) { btn.textContent = '暂停生成'; btn.setAttribute('onclick', 'App.stopGenerateReports()'); }
+
+        let generated = 0;
+        while (!this._reportGenStopped) {
+            const result = await API.generateAllReports();
+            if (!result) { textEl.textContent = '出错'; break; }
+            if (result.done) { textEl.textContent = `全部完成 (${generated})`; break; }
+            generated++;
+            const total = generated + result.remaining;
+            const pct = Math.round(generated / total * 100);
+            fillEl.style.width = pct + '%';
+            textEl.textContent = `${generated}/${total} (${result.generated || ''})`;
+            this.loadReportTree();
+        }
+
+        // 恢复按钮
+        if (btn) { btn.textContent = '一键全部生成'; btn.setAttribute('onclick', 'App.generateAllReports()'); }
+        if (this._reportGenStopped) {
+            textEl.textContent = `已暂停 (${generated} 份)`;
+            this.toast(`已暂停，共生成 ${generated} 份报告`);
+        } else {
+            this.toast(`已生成 ${generated} 份报告`);
+        }
+        this.loadReportTree();
+        setTimeout(() => { progressDiv.style.display = 'none'; }, 5000);
+    },
+
+    stopGenerateReports() {
+        this._reportGenStopped = true;
+    },
+
+    async formatOneReport(periodKey) {
+        const display = document.getElementById('report-display');
+        if (display) display.innerHTML = '<div class="loading">AI 整理格式中，请稍候...</div>';
+        const report = await API.formatReport(periodKey);
+        if (report) {
+            this._renderReport(report);
+            this.loadReportTree();
+            this.toast('格式整理完成');
+        } else {
+            if (display) display.innerHTML = '<div class="empty-state">格式整理失败</div>';
+        }
+    },
+
+    _formatGenStopped: false,
+
+    async formatAllReports() {
+        this._formatGenStopped = false;
+        const progressDiv = document.getElementById('report-gen-progress');
+        const fillEl = document.getElementById('report-progress-fill');
+        const textEl = document.getElementById('report-progress-text');
+        progressDiv.style.display = '';
+
+        const btn = document.querySelector('[onclick="App.formatAllReports()"]');
+        if (btn) { btn.textContent = '暂停整理'; btn.setAttribute('onclick', 'App.stopFormatReports()'); }
+
+        let formatted = 0;
+        while (!this._formatGenStopped) {
+            const result = await API.formatAllReports();
+            if (!result) { textEl.textContent = '出错'; break; }
+            if (result.done) { textEl.textContent = `格式整理完成 (${formatted})`; break; }
+            formatted++;
+            const total = formatted + result.remaining;
+            const pct = Math.round(formatted / total * 100);
+            fillEl.style.width = pct + '%';
+            textEl.textContent = `格式化 ${formatted}/${total} (${result.formatted_key || ''})`;
+            this.loadReportTree();
+        }
+
+        if (btn) { btn.textContent = '一键整理格式'; btn.setAttribute('onclick', 'App.formatAllReports()'); }
+        if (this._formatGenStopped) {
+            textEl.textContent = `已暂停 (${formatted} 份)`;
+            this.toast(`已暂停，共格式化 ${formatted} 份报告`);
+        } else {
+            this.toast(`已格式化 ${formatted} 份报告`);
+        }
+        this.loadReportTree();
+        setTimeout(() => { progressDiv.style.display = 'none'; }, 5000);
+    },
+
+    stopFormatReports() {
+        this._formatGenStopped = true;
+    },
+
+    async showWordCloud(periodType, periodKey) {
+        const container = document.getElementById('wordcloud-container');
+        if (!container) return;
+        container.innerHTML = '<div class="loading">生成词云中...</div>';
+        const url = `/api/reports/wordcloud?period_type=${periodType}&period_key=${encodeURIComponent(periodKey)}&force=true`;
+        try {
+            const resp = await fetch(url);
+            if (resp.headers.get('content-type')?.includes('image/png')) {
+                const blob = await resp.blob();
+                const imgUrl = URL.createObjectURL(blob);
+                container.innerHTML = `<img src="${imgUrl}" alt="词云" style="max-width:100%;border-radius:8px;border:1px solid var(--border)">`;
+            } else {
+                const json = await resp.json();
+                container.innerHTML = `<div class="empty-state">${json.message || '生成失败'}</div>`;
+            }
+        } catch (e) {
+            container.innerHTML = '<div class="empty-state">词云生成失败</div>';
+        }
+    },
+
+    // ══════════════════════════════════════════════════
+    // ── Tags ──
+    // ══════════════════════════════════════════════════
+    async loadTags() {
+        const tags = await API.getTags();
+        const el = document.getElementById('tag-list');
+        if (!el) return;
+        if (!tags || !tags.length) {
+            el.innerHTML = '<div class="empty-state">暂无标签</div>';
+            return;
+        }
+        el.innerHTML = tags.map(t => `
+            <div class="tag-item" onclick="App.selectTag(${t.id})">
+                <span class="tag-color-dot" style="background:${t.color || '#888'}"></span>
+                <span class="tag-name">${this.esc(t.name)}</span>
+                <span class="tag-count">${t.entry_count}</span>
+                <button class="btn-icon btn-xs btn-danger" onclick="event.stopPropagation();App.deleteTag(${t.id},'${this.esc(t.name)}')" title="删除">🗑️</button>
+            </div>
+        `).join('');
+    },
+
+    showCreateTagDialog() {
+        const modal = document.getElementById('tag-modal');
+        if (!modal) return;
+        document.getElementById('tag-name').value = '';
+        document.getElementById('tag-color').value = '#00d4ff';
+        document.getElementById('tag-desc').value = '';
+        modal.classList.add('active');
+
+        const form = document.getElementById('tag-form');
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('tag-name').value.trim();
+            if (!name) return;
+            const color = document.getElementById('tag-color').value;
+            const description = document.getElementById('tag-desc').value.trim() || null;
+            await this._createTag(name, color, description);
+            modal.classList.remove('active');
+        };
+    },
+
+    closeTagModal() {
+        document.getElementById('tag-modal')?.classList.remove('active');
+    },
+
+    async _createTag(name, color, description) {
+        const result = await API.createTag({ name, color, description });
+        if (result) {
+            this.toast(`标签 "${name}" 已创建`);
+            this.loadTags();
+        }
+    },
+
+    async deleteTag(id, name) {
+        if (!confirm(`确定删除标签「${name}」？`)) return;
+        await API.deleteTag(id);
+        this.toast('已删除');
+        this.loadTags();
+        document.getElementById('tag-detail').innerHTML = '<div class="empty-state">选择一个标签查看详情</div>';
+    },
+
+    _selectedTagId: null,
+    async selectTag(tagId) {
+        this._selectedTagId = tagId;
+        const detail = document.getElementById('tag-detail');
+        detail.innerHTML = '<div class="loading">加载中...</div>';
+
+        const [tags, entriesData] = await Promise.all([
+            API.getTags(),
+            API.getTagEntries(tagId),
+        ]);
+        const tag = tags?.find(t => t.id === tagId);
+        if (!tag) { detail.innerHTML = '<div class="empty-state">标签不存在</div>'; return; }
+
+        const entries = entriesData?.items || [];
+        const total = entriesData?.total || 0;
+
+        detail.innerHTML = `
+            <div class="tag-detail-header">
+                <h2 style="color:${tag.color || 'var(--accent)'}">${this.esc(tag.name)}</h2>
+                <span class="tag-count-label">${total} 条记录</span>
+                ${tag.description ? `<p class="tag-desc">${this.esc(tag.description)}</p>` : ''}
+            </div>
+            <div class="tag-actions" style="margin:10px 0;display:flex;gap:6px">
+                <button class="btn btn-sm btn-primary" onclick="App.aiBatchTag(${tagId},'keyword')">关键词打标</button>
+                <button class="btn btn-sm" onclick="App.aiBatchTag(${tagId},'ai')">AI 智能打标</button>
+                <button class="btn btn-sm" onclick="App.showTagProgress(${tagId})">AI 进度分析</button>
+            </div>
+            <div id="tag-ai-status" style="margin-bottom:8px"></div>
+            <div id="tag-progress-area"></div>
+            <div class="tag-timeline">
+                <h3 class="panel-title">相关记录</h3>
+                ${entries.length ? this._groupEntriesByYear(entries) : '<div class="empty-state">暂无相关记录，点击"AI 智能打标"开始扫描</div>'}
+            </div>`;
+    },
+
+    _groupEntriesByYear(entries) {
+        const byYear = {};
+        entries.forEach(e => {
+            const yr = e.date.slice(0, 4);
+            if (!byYear[yr]) byYear[yr] = [];
+            byYear[yr].push(e);
+        });
+        const years = Object.keys(byYear).sort().reverse();
+        return years.map(yr => {
+            const items = byYear[yr];
+            return `<details class="tag-year-group" ${yr === years[0] ? 'open' : ''}>
+                <summary class="tag-year-header">${yr}年 <span class="tag-count">${items.length}</span></summary>
+                <div class="tag-year-entries">
+                    ${items.map(e => {
+                        const cat = e.category || {};
+                        return `<div class="tag-entry-item">
+                            <span class="tag-entry-date">${e.date}</span>
+                            <span class="tag-entry-cat" style="color:${cat.color || '#888'}">${cat.icon || ''} ${cat.name || ''}</span>
+                            <span class="tag-entry-content">${this.esc(e.content)}</span>
+                        </div>`;
+                    }).join('')}
+                </div>
+            </details>`;
+        }).join('');
+    },
+
+    async aiBatchTag(tagId, mode = 'keyword') {
+        const statusEl = document.getElementById('tag-ai-status');
+        if (!statusEl) return;
+        const modeLabel = mode === 'keyword' ? '关键词' : 'AI';
+        statusEl.innerHTML = `<div class="loading">${modeLabel}扫描中...</div>`;
+
+        let totalTagged = 0;
+        let totalScanned = 0;
+        while (true) {
+            const result = await API.aiBatchTag(tagId, mode);
+            if (!result) { statusEl.innerHTML = '<span style="color:var(--red)">打标出错</span>'; return; }
+            totalTagged += result.tagged;
+            totalScanned += result.total_scanned;
+            statusEl.innerHTML = `<span style="color:var(--accent);font-family:var(--font-mono);font-size:12px">${modeLabel}已扫描 ${totalScanned}，标记 ${totalTagged}${result.done ? ' (完成)' : '...'}</span>`;
+            if (result.done) break;
+        }
+
+        this.toast(`${modeLabel}打标完成：${totalTagged} 条`);
+        this.selectTag(tagId);
+        this.loadTags();
+    },
+
+    async showTagProgress(tagId) {
+        const area = document.getElementById('tag-progress-area');
+        if (!area) return;
+        area.innerHTML = '<div class="loading">AI 分析进度中...</div>';
+        const result = await API.getTagProgress(tagId);
+        if (result && result.summary) {
+            const html = typeof marked !== 'undefined' ? marked.parse(result.summary) : result.summary.replace(/\n/g, '<br>');
+            area.innerHTML = `<div class="tag-progress-summary markdown-body">${html}</div>`;
+        } else {
+            area.innerHTML = '<div class="empty-state">无法生成进度分析</div>';
+        }
+    },
+
+    // ══════════════════════════════════════════════════
+    // ── Voice ──
+    // ══════════════════════════════════════════════════
+    _mediaRecorder: null,
+    _audioChunks: [],
+    _isRecording: false,
+
+    async toggleVoice() {
+        if (this._isRecording) {
+            this._stopRecording();
+        } else {
+            this._startRecording();
+        }
+    },
+
+    async _startRecording() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            this._mediaRecorder = new MediaRecorder(stream);
+            this._audioChunks = [];
+            this._mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) this._audioChunks.push(e.data);
+            };
+            this._mediaRecorder.onstop = async () => {
+                stream.getTracks().forEach(t => t.stop());
+                const blob = new Blob(this._audioChunks, { type: 'audio/webm' });
+                const voiceBtn = document.getElementById('voice-btn');
+                voiceBtn.textContent = '...';
+                voiceBtn.classList.remove('voice-recording');
+                const result = await API.transcribeVoice(blob);
+                voiceBtn.textContent = '🎤';
+                if (result && result.text) {
+                    const input = document.getElementById('quick-input');
+                    input.value = (input.value ? input.value + ' ' : '') + result.text;
+                    input.focus();
+                    this.toast('语音识别完成');
+                } else {
+                    this.toast('语音识别失败');
+                }
+            };
+            this._mediaRecorder.start();
+            this._isRecording = true;
+            const voiceBtn = document.getElementById('voice-btn');
+            voiceBtn.textContent = '⏹';
+            voiceBtn.classList.add('voice-recording');
+            this.toast('录音中...');
+        } catch (e) {
+            console.error('Mic error:', e);
+            this.toast('无法访问麦克风');
+        }
+    },
+
+    _stopRecording() {
+        if (this._mediaRecorder && this._mediaRecorder.state === 'recording') {
+            this._mediaRecorder.stop();
+        }
+        this._isRecording = false;
     },
 
     // ── Theme ──

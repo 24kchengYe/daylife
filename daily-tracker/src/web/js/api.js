@@ -109,6 +109,51 @@ const API = {
         return this.request(`/github/sync?start=${start}&end=${end}`);
     },
 
+    // ── 报告 ──
+    async getReportTree() { return this.request('/reports/tree'); },
+    async getReport(periodKey) { return this.request(`/reports/${encodeURIComponent(periodKey)}`); },
+    async generateReport(periodType, periodKey, force = false) {
+        return this.request(`/reports/generate?period_type=${periodType}&period_key=${encodeURIComponent(periodKey)}&force=${force}`);
+    },
+    async generateAllReports() { return this.request('/reports/generate-all'); },
+    async formatReport(periodKey) {
+        return this.request(`/reports/format-one?period_key=${encodeURIComponent(periodKey)}`);
+    },
+    async formatAllReports() { return this.request('/reports/format-all'); },
+
+    // ── 标签 ──
+    async getTags() { return this.request('/tags'); },
+    async createTag(data) {
+        return this.request('/tags', { method: 'POST', body: JSON.stringify(data) });
+    },
+    async deleteTag(tagId) {
+        return this.request(`/tags/${tagId}`, { method: 'DELETE' });
+    },
+    async getTagEntries(tagId) {
+        return this.request(`/tags/${tagId}/entries?limit=9999`);
+    },
+    async aiBatchTag(tagId, mode = 'keyword') {
+        return this.request(`/tags/${tagId}/ai-batch?mode=${mode}`);
+    },
+    async getTagProgress(tagId) {
+        return this.request(`/tags/${tagId}/progress`);
+    },
+
+    // ── 语音 ──
+    async transcribeVoice(audioBlob) {
+        const formData = new FormData();
+        formData.append('file', audioBlob, 'recording.webm');
+        try {
+            const resp = await fetch(this.BASE + '/voice/transcribe', {
+                method: 'POST',
+                body: formData,
+            });
+            const json = await resp.json();
+            if (json.code !== 0) { console.error('Voice error:', json.message); return null; }
+            return json.data;
+        } catch (e) { console.error('Voice failed:', e); return null; }
+    },
+
     // ── 导出（前端生成下载） ──
     async exportEntries(start, end, format = 'csv') {
         const data = await this.getEntries({ start, end, limit: 999 });

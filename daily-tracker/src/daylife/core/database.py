@@ -6,7 +6,7 @@ from pathlib import Path
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
-from daylife.core.models import Base, Category
+from daylife.core.models import Base, Category, Tag
 
 DEFAULT_DB_DIR = Path.home() / ".local" / "share" / "daylife"
 DEFAULT_DB_PATH = DEFAULT_DB_DIR / "daylife.db"
@@ -60,15 +60,19 @@ def init_db(engine=None) -> Session:
 
     Base.metadata.create_all(engine)
 
-    # 自动迁移：添加 ai_classified 列（如果不存在）
+    # 自动迁移：添加缺失列（如果不存在）
+    _text = __import__("sqlalchemy").text
     with engine.connect() as conn:
-        try:
-            conn.execute(__import__("sqlalchemy").text(
-                "ALTER TABLE daily_entries ADD COLUMN ai_classified INTEGER DEFAULT 0"
-            ))
-            conn.commit()
-        except Exception:
-            pass  # 列已存在
+        for stmt in [
+            "ALTER TABLE daily_entries ADD COLUMN ai_classified INTEGER DEFAULT 0",
+            "ALTER TABLE tags ADD COLUMN description TEXT",
+            "ALTER TABLE reports ADD COLUMN formatted INTEGER DEFAULT 0",
+        ]:
+            try:
+                conn.execute(_text(stmt))
+                conn.commit()
+            except Exception:
+                pass  # 列已存在
 
     session_factory = sessionmaker(bind=engine)
     session = session_factory()

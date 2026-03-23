@@ -225,6 +225,15 @@ app.whenReady().then(async () => {
     createFloatButton();
     globalShortcut.register('Alt+D', togglePanel);
     globalShortcut.register('Alt+Shift+D', openFullWindow);
+    globalShortcut.register('Alt+V', () => {
+        // 语音快捷键：打开面板并触发语音录入
+        createPanel();
+        setTimeout(() => {
+            if (panelWin && !panelWin.isDestroyed()) {
+                panelWin.webContents.executeJavaScript('startVoiceFromHotkey()').catch(() => {});
+            }
+        }, 500);
+    });
 
     // 等服务就绪再打开窗口
     const ok = await waitForServer();

@@ -71,6 +71,38 @@ class TagOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class TagCreate(BaseModel):
+    name: str
+    color: str | None = None
+    description: str | None = None
+
+
+class TagDetailOut(BaseModel):
+    id: int
+    name: str
+    color: str | None = None
+    description: str | None = None
+    entry_count: int = 0
+
+    model_config = {"from_attributes": True}
+
+
+class ReportOut(BaseModel):
+    id: int
+    period_type: str
+    period_key: str
+    date_from: date
+    date_to: date
+    title: str | None = None
+    content: str
+    model_used: str | None = None
+    entry_count: int = 0
+    formatted: int = 0
+    generated_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
+
+
 # ══════════════════════════════════════════════════════════════
 # 活动记录
 # ══════════════════════════════════════════════════════════════

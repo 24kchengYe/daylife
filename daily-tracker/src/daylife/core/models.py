@@ -21,9 +21,17 @@ class Base(DeclarativeBase):
     pass
 
 
-# 多对多关联表
+# 多对多关联表：entry <-> tag（打上的标签）
 entry_tags = Table(
     "entry_tags",
+    Base.metadata,
+    Column("entry_id", Integer, ForeignKey("daily_entries.id", ondelete="CASCADE"), primary_key=True),
+    Column("tag_id", Integer, ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True),
+)
+
+# 记录 AI 扫描过的 entry（无论是否打上标签）
+tag_scanned = Table(
+    "tag_scanned",
     Base.metadata,
     Column("entry_id", Integer, ForeignKey("daily_entries.id", ondelete="CASCADE"), primary_key=True),
     Column("tag_id", Integer, ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True),
@@ -52,6 +60,7 @@ class Tag(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     color: Mapped[str | None] = mapped_column(String(7))
+    description: Mapped[str | None] = mapped_column(Text)
 
     entries: Mapped[list["DailyEntry"]] = relationship(
         secondary=entry_tags, back_populates="tags"
@@ -103,6 +112,25 @@ class Attachment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     entry: Mapped[DailyEntry] = relationship(back_populates="attachments")
+
+
+class Report(Base):
+    __tablename__ = "reports"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    period_type: Mapped[str] = mapped_column(String(20), nullable=False)  # "week" | "month" | "year"
+    period_key: Mapped[str] = mapped_column(String(20), nullable=False, unique=True)  # "2026-W12" | "2026-03" | "2026"
+    date_from: Mapped[date] = mapped_column(Date, nullable=False)
+    date_to: Mapped[date] = mapped_column(Date, nullable=False)
+    title: Mapped[str | None] = mapped_column(String(200))
+    content: Mapped[str] = mapped_column(Text, nullable=False)  # Markdown
+    model_used: Mapped[str | None] = mapped_column(String(100))
+    entry_count: Mapped[int] = mapped_column(Integer, default=0)
+    formatted: Mapped[int] = mapped_column(Integer, default=0)  # 0=未格式化, 1=已格式化
+    generated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    def __repr__(self) -> str:
+        return f"<Report {self.period_type} {self.period_key}>"
 
 
 class ImportMetadata(Base):

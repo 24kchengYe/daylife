@@ -117,6 +117,23 @@ html, body {
 }
 .footer-link:hover { color: var(--accent2); background: var(--bg2); }
 
+/* mic button */
+.mic-btn {
+    width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); cursor: pointer;
+    font-size: 14px; display: flex; align-items: center; justify-content: center;
+    transition: all .2s; flex-shrink: 0;
+}
+.mic-btn:hover { background: var(--bg3); border-color: var(--accent); }
+.mic-btn.recording {
+    background: var(--red); border-color: var(--red); color: #fff;
+    animation: mic-pulse 1s infinite;
+}
+@keyframes mic-pulse {
+    0%, 100% { box-shadow: 0 0 4px rgba(248,113,113,.4); }
+    50% { box-shadow: 0 0 12px rgba(248,113,113,.7); }
+}
+
 /* scrollbar */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -150,7 +167,10 @@ html, body {
     </div>
 
     <div class="quick-bar">
-        <textarea class="quick-input" id="quick-input" rows="1" placeholder="记录一下..."></textarea>
+        <div style="display:flex;gap:6px;align-items:flex-start">
+            <textarea class="quick-input" id="quick-input" rows="1" placeholder="记录一下..." style="flex:1"></textarea>
+            <button id="panel-mic-btn" class="mic-btn" onclick="togglePanelVoice()" title="语音输入">🎤</button>
+        </div>
         <div class="quick-bottom">
             <select id="quick-cat" class="quick-select">
                 <option value="">AI分类</option>
@@ -267,6 +287,65 @@ document.getElementById('quick-input').addEventListener('input', function() {
     this.style.height = 'auto';
     this.style.height = Math.min(this.scrollHeight, 80) + 'px';
 });
+
+// ── 语音录入 ──
+let _recorder = null;
+let _audioChunks = [];
+let _isRecording = false;
+
+async function togglePanelVoice() {
+    if (_isRecording) {
+        stopPanelVoice();
+    } else {
+        startPanelVoice();
+    }
+}
+
+async function startPanelVoice() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        _recorder = new MediaRecorder(stream);
+        _audioChunks = [];
+        _recorder.ondataavailable = (e) => {
+            if (e.data.size > 0) _audioChunks.push(e.data);
+        };
+        _recorder.onstop = async () => {
+            stream.getTracks().forEach(t => t.stop());
+            const blob = new Blob(_audioChunks, { type: 'audio/webm' });
+            const btn = document.getElementById('panel-mic-btn');
+            btn.textContent = '...';
+            btn.classList.remove('recording');
+
+            const formData = new FormData();
+            formData.append('file', blob, 'recording.webm');
+            try {
+                const resp = await fetch(API_BASE + '/voice/transcribe', { method: 'POST', body: formData });
+                const json = await resp.json();
+                if (json.code === 0 && json.data?.text) {
+                    const input = document.getElementById('quick-input');
+                    input.value = (input.value ? input.value + ' ' : '') + json.data.text;
+                    input.focus();
+                }
+            } catch (e) { console.error('Voice failed:', e); }
+            btn.textContent = '🎤';
+        };
+        _recorder.start();
+        _isRecording = true;
+        const btn = document.getElementById('panel-mic-btn');
+        btn.textContent = '⏹';
+        btn.classList.add('recording');
+    } catch (e) { console.error('Mic error:', e); }
+}
+
+function stopPanelVoice() {
+    if (_recorder && _recorder.state === 'recording') _recorder.stop();
+    _isRecording = false;
+}
+
+// 全局热键触发入口
+function startVoiceFromHotkey() {
+    if (!_isRecording) startPanelVoice();
+}
 
 // 启动
 loadToday();

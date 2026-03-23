@@ -12,10 +12,11 @@ daily-tracker/desktop/node_modules/
 daily-tracker/desktop/dist/
 daily-tracker/desktop/out/
 
-# Database (备份到 backup/ 目录)
-*.db
+# Database (本地的不跟踪，备份目录的跟踪)
 *.db-wal
 *.db-shm
+daily-tracker/*.db
+!backups/*.db
 
 # Env
 .env
