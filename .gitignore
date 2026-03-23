@@ -12,14 +12,21 @@ daily-tracker/desktop/node_modules/
 daily-tracker/desktop/dist/
 daily-tracker/desktop/out/
 
-# Database (本地的不跟踪，备份目录的跟踪)
+# Database
+*.db
 *.db-wal
 *.db-shm
-daily-tracker/*.db
-!backups/*.db
 
-# Env
+# Env (API keys)
 .env
+
+# Backups (moved to private repo)
+backups/
+
+# Wordcloud cache
+wordclouds/
+daily-tracker/wordclouds/
+daily-tracker/src/wordclouds/
 
 # IDE
 .idea/
@@ -29,6 +36,3 @@ daily-tracker/*.db
 # OS
 .DS_Store
 Thumbs.db
-
-# Backup data (这个目录会存数据库备份)
-# 不忽略 backup/ 目录本身，但忽略里面的临时文件

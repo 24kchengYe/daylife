@@ -1,19 +1,12 @@
-"""自动备份数据库到 GitHub 仓库
-
-用法：
-    python backup.py          # 手动备份
-    配合 Windows 任务计划程序每周自动执行
-"""
+"""自动备份数据库到私有 GitHub 仓库 (daylife-backup)"""
 
 import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
 
-# 路径
 DB_PATH = Path.home() / ".local" / "share" / "daylife" / "daylife.db"
-REPO_DIR = Path(__file__).parent.parent  # 061daylife/
-BACKUP_DIR = REPO_DIR / "backups"
+BACKUP_REPO = Path("D:/pythonPycharms/工具开发/061daylife-backup")
 
 
 def backup():
@@ -21,30 +14,27 @@ def backup():
         print(f"[Backup] Database not found: {DB_PATH}")
         return
 
-    BACKUP_DIR.mkdir(exist_ok=True)
+    BACKUP_REPO.mkdir(exist_ok=True)
 
-    # 复制数据库
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_file = BACKUP_DIR / f"daylife_{timestamp}.db"
+    backup_file = BACKUP_REPO / f"daylife_{timestamp}.db"
     shutil.copy2(DB_PATH, backup_file)
     print(f"[Backup] Copied to {backup_file}")
 
     # 只保留最近 8 个备份
-    backups = sorted(BACKUP_DIR.glob("daylife_*.db"), reverse=True)
+    backups = sorted(BACKUP_REPO.glob("daylife_*.db"), reverse=True)
     for old in backups[8:]:
         old.unlink()
         print(f"[Backup] Removed old: {old.name}")
 
-    # Git commit + push
-    subprocess.run(["git", "add", "backups/"], cwd=str(REPO_DIR))
+    subprocess.run(["git", "add", "-A"], cwd=str(BACKUP_REPO))
     result = subprocess.run(
         ["git", "commit", "-m", f"backup: {timestamp}"],
-        cwd=str(REPO_DIR),
-        capture_output=True, text=True,
+        cwd=str(BACKUP_REPO), capture_output=True, text=True,
     )
     if result.returncode == 0:
-        subprocess.run(["git", "push"], cwd=str(REPO_DIR))
-        print(f"[Backup] Pushed to GitHub")
+        subprocess.run(["git", "push"], cwd=str(BACKUP_REPO))
+        print(f"[Backup] Pushed to daylife-backup repo")
     else:
         print(f"[Backup] No changes to commit")
 
