@@ -1,0 +1,41 @@
+# DayLife 配置文件
+# 所有路径支持环境变量和 ~ 展开
+
+# 数据库配置
+database:
+  # SQLite 数据库路径（默认 ~/.local/share/daylife/daylife.db）
+  path: null
+  # 启用 WAL 模式（推荐保持开启）
+  wal_mode: true
+
+# Web Dashboard 配置
+web:
+  host: "127.0.0.1"
+  port: 8063
+  # 开发模式热重载
+  reload: false
+
+# MCP Server 配置
+mcp:
+  # 传输模式: stdio / sse
+  transport: "stdio"
+
+# Excel 数据源路径
+import:
+  excel_path: "D:/my college/zyc学习计划/"
+
+# 显示偏好
+display:
+  # 日期格式: iso / cn / us
+  date_format: "iso"
+  # 语言: zh / en
+  language: "zh"
+  # 每页显示条数
+  page_size: 20
+
+# 导出配置
+export:
+  # 默认导出目录
+  output_dir: "./exports"
+  # 默认导出格式: json / csv / markdown
+  default_format: "markdown"

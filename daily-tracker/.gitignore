@@ -1,0 +1,30 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Data
+data/
+*.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Env
+.env
+.venv/
+venv/
+
+# Frontend build
+node_modules/
+frontend/dist/
+src/daylife/web/dist/
+
+# OS
+.DS_Store
+Thumbs.db

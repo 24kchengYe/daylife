@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { background: transparent; overflow: hidden; user-select: none; width: 52px; height: 52px; }
+.float-btn {
+    width: 46px; height: 46px; margin: 3px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #5c6bc0 0%, #7e57c2 100%);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 12px rgba(92,107,192,.5);
+    transition: transform .12s, box-shadow .12s;
+    position: relative;
+}
+.float-btn:hover {
+    transform: scale(1.08);
+    box-shadow: 0 4px 20px rgba(92,107,192,.6);
+}
+.float-btn:active { transform: scale(0.92); }
+.float-btn .icon { font-size: 20px; color: white; font-weight: 800; font-family: sans-serif; }
+/* 呼吸灯 */
+.float-btn::after {
+    content: ''; position: absolute; inset: -3px;
+    border-radius: 50%; border: 2px solid rgba(126,87,194,.3);
+    animation: breathe 3s ease-in-out infinite; pointer-events: none;
+}
+@keyframes breathe {
+    0%, 100% { opacity: 0.2; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.1); }
+}
+/* 右键菜单提示 */
+.float-btn[title]::before { content: none; }
+</style>
+</head>
+<body>
+<div class="float-btn" id="float-btn" title="左键:面板 | 右键:菜单 | 拖动:移动">
+    <span class="icon">DL</span>
+</div>
+<script>
+const btn = document.getElementById('float-btn');
+let isDragging = false;
+let dragStart = { x: 0, y: 0 };
+let winStart = { x: 0, y: 0 };
+const DRAG_THRESHOLD = 5;
+
+let lastScreen = null;
+
+btn.addEventListener('mousedown', (e) => {
+    if (e.button === 0) {
+        isDragging = false;
+        dragStart = { x: e.screenX, y: e.screenY };
+        lastScreen = { x: e.screenX, y: e.screenY };
+        document.addEventListener('mousemove', onDrag);
+        document.addEventListener('mouseup', onUp);
+    }
+});
+
+function onDrag(e) {
+    const dx = e.screenX - lastScreen.x;
+    const dy = e.screenY - lastScreen.y;
+    const totalDx = e.screenX - dragStart.x;
+    const totalDy = e.screenY - dragStart.y;
+
+    if (Math.abs(totalDx) > DRAG_THRESHOLD || Math.abs(totalDy) > DRAG_THRESHOLD) {
+        isDragging = true;
+        if (window.daylife) window.daylife.moveFloat(dx, dy);
+        lastScreen = { x: e.screenX, y: e.screenY };
+    }
+}
+
+function onUp() {
+    document.removeEventListener('mousemove', onDrag);
+    document.removeEventListener('mouseup', onUp);
+    if (!isDragging) {
+        if (window.daylife) window.daylife.togglePanel();
+    }
+    isDragging = false;
+}
+
+// 右键：打开完整日历
+btn.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    if (window.daylife) window.daylife.openFull();
+});
+</script>
+</body>
+</html>

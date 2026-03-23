@@ -1,0 +1,29 @@
+{
+  "name": "daylife-desktop",
+  "productName": "DayLife",
+  "version": "0.1.0",
+  "description": "DayLife Desktop Widget - 极客风格桌面悬浮窗",
+  "main": "main.js",
+  "scripts": {
+    "start": "node_modules/electron/dist/DayLife.exe \"%cd%\" --app-user-model-id=com.DayLife.dev",
+    "dev": "node_modules/electron/dist/DayLife.exe \"%cd%\" --app-user-model-id=com.DayLife.dev --dev",
+    "postinstall": "node scripts/copy-electron.js",
+    "build": "electron-builder --win portable",
+    "build-install": "electron-builder --win nsis"
+  },
+  "author": "24kchengYe",
+  "license": "MIT",
+  "type": "commonjs",
+  "build": {
+    "appId": "com.24kchengye.daylife",
+    "productName": "DayLife",
+    "win": {
+      "icon": "icon.ico"
+    }
+  },
+  "devDependencies": {
+    "electron": "^41.0.3",
+    "electron-builder": "^26.8.1",
+    "rcedit": "^5.0.2"
+  }
+}

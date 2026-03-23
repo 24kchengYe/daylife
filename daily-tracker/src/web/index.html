@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DayLife - 每日记录</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/locale/zh-cn.js"></script>
+    <script>dayjs.locale('zh-cn')</script>
+</head>
+<body>
+    <!-- ═══ 顶部导航 ═══ -->
+    <header class="navbar">
+        <div class="navbar-left">
+            <h1 class="logo">DayLife</h1>
+            <nav class="nav-links">
+                <a data-nav="dashboard" class="nav-active">日历</a>
+                <a data-nav="search">搜索</a>
+                <a data-nav="stats">统计</a>
+                <a data-nav="export">导出</a>
+                <a data-nav="import">导入</a>
+            </nav>
+        </div>
+        <div class="navbar-right">
+            <button id="btn-today" class="btn btn-sm btn-accent">今天</button>
+            <button id="btn-prev" class="btn btn-sm btn-ghost">&lsaquo;</button>
+            <span id="month-label" class="month-label" onclick="App.showMonthPicker()" title="点击跳转到指定月份" style="cursor:pointer">2026年3月</span>
+            <button id="btn-next" class="btn btn-sm btn-ghost">&rsaquo;</button>
+            <input type="month" id="month-picker" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0">
+            <button id="theme-toggle" class="btn-icon" title="切换主题">
+                <span id="theme-icon">🌙</span>
+            </button>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <!-- ═══ 日历视图 ═══ -->
+        <div class="view-panel active" data-view="dashboard">
+            <div class="month-calendar-card">
+                <table class="month-calendar" id="month-calendar">
+                    <thead>
+                        <tr>
+                            <th>周一</th><th>周二</th><th>周三</th><th>周四</th><th>周五</th>
+                            <th class="weekend">周六</th><th class="weekend">周日</th>
+                        </tr>
+                    </thead>
+                    <tbody id="calendar-body"></tbody>
+                </table>
+            </div>
+
+            <!-- AI 分类 -->
+            <div id="ai-classify-bar" class="ai-classify-bar" style="display:none">
+                <div class="ai-classify-info">
+                    <span id="ai-classify-text">发现未分类条目</span>
+                    <button id="ai-classify-btn" class="btn btn-sm btn-primary" onclick="App.runAIClassify()">AI 自动分类</button>
+                </div>
+                <div id="ai-classify-progress" class="ai-progress" style="display:none">
+                    <div class="ai-progress-bar"><div id="ai-progress-fill" class="ai-progress-fill"></div></div>
+                    <span id="ai-progress-text">0%</span>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ═══ 搜索视图 ═══ -->
+        <div class="view-panel" data-view="search">
+            <div class="panel-card">
+                <div class="search-bar">
+                    <input type="text" id="search-input" class="input search-input" placeholder="搜索活动记录...">
+                    <button id="search-btn" class="btn btn-primary">搜索</button>
+                </div>
+                <div id="search-results" class="search-results">
+                    <div class="empty-state">输入关键词开始搜索</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ 统计视图 ═══ -->
+        <div class="view-panel" data-view="stats">
+            <div class="stats-cards">
+                <div class="stat-card">
+                    <div class="stat-value" id="streak-count">0</div>
+                    <div class="stat-label">连续记录</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="streak-longest">0</div>
+                    <div class="stat-label">最长连续</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="total-entries">0</div>
+                    <div class="stat-label">今年记录</div>
+                </div>
+            </div>
+            <div style="display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+                <button class="btn btn-sm stat-range" data-range="month" onclick="App.setStatRange('month')">本月</button>
+                <button class="btn btn-sm stat-range" data-range="quarter" onclick="App.setStatRange('quarter')">本季度</button>
+                <button class="btn btn-sm stat-range" data-range="year" onclick="App.setStatRange('year')">本年</button>
+                <button class="btn btn-sm stat-range" data-range="all" onclick="App.setStatRange('all')">全部</button>
+                <select id="stat-period" class="input input-sm" style="width:auto" onchange="App.setStatPeriod(this.value)">
+                    <option value="">指定时间...</option>
+                    <optgroup label="按年"></optgroup>
+                    <optgroup label="按月"></optgroup>
+                </select>
+            </div>
+            <div class="chart-grid">
+                <div class="panel-card">
+                    <h3 class="panel-title" id="completion-title">本月完成率</h3>
+                    <div id="chart-month-completion" class="chart-area"></div>
+                </div>
+                <div class="panel-card">
+                    <h3 class="panel-title" id="category-title">分类占比</h3>
+                    <div id="chart-category" class="chart-area"></div>
+                </div>
+            </div>
+            <div class="panel-card" style="margin-top:16px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                    <h3 class="panel-title" style="margin:0">活动趋势</h3>
+                    <div style="display:flex;gap:4px">
+                        <button class="btn btn-sm trend-range" data-range="30" onclick="App.setTrendRange(30)">近30天</button>
+                        <button class="btn btn-sm trend-range" data-range="90" onclick="App.setTrendRange(90)">近3月</button>
+                        <button class="btn btn-sm trend-range" data-range="365" onclick="App.setTrendRange(365)">近1年</button>
+                        <button class="btn btn-sm trend-range" data-range="0" onclick="App.setTrendRange(0)">全部</button>
+                    </div>
+                </div>
+                <div id="chart-trend" class="chart-area-wide"></div>
+            </div>
+            <!-- 年度热力图 -->
+            <div class="panel-card" style="margin-top:16px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                    <h3 class="panel-title" style="margin:0">年度总览</h3>
+                    <select class="year-select" id="heatmap-year"></select>
+                </div>
+                <div class="calendar-grid" id="heatmap-grid"></div>
+                <div class="calendar-legend">
+                    <span>少</span>
+                    <span class="legend-cell level-0"></span>
+                    <span class="legend-cell level-1"></span>
+                    <span class="legend-cell level-2"></span>
+                    <span class="legend-cell level-3"></span>
+                    <span class="legend-cell level-4"></span>
+                    <span>多</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ 导出视图 ═══ -->
+        <div class="view-panel" data-view="export">
+            <div class="panel-card">
+                <h3 class="panel-title">导出数据</h3>
+                <div class="export-form">
+                    <div class="form-row-inline">
+                        <div class="form-field">
+                            <label>起始日期</label>
+                            <input type="date" id="export-start" class="input">
+                        </div>
+                        <div class="form-field">
+                            <label>结束日期</label>
+                            <input type="date" id="export-end" class="input">
+                        </div>
+                        <div class="form-field">
+                            <label>格式</label>
+                            <select id="export-format" class="input">
+                                <option value="csv">CSV</option>
+                                <option value="json">JSON</option>
+                                <option value="markdown">Markdown</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button id="export-btn" class="btn btn-primary">导出下载</button>
+                    <div id="export-status" class="export-status"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ 导入视图 ═══ -->
+        <div class="view-panel" data-view="import">
+            <div class="panel-card">
+                <h3 class="panel-title">GitHub Commits 同步</h3>
+                <div class="import-form">
+                    <div class="form-row-inline">
+                        <div class="form-field">
+                            <label>起始日期</label>
+                            <input type="date" id="gh-sync-start" class="input" value="2024-01-01">
+                        </div>
+                        <div class="form-field">
+                            <label>结束日期</label>
+                            <input type="date" id="gh-sync-end" class="input">
+                        </div>
+                        <button id="gh-sync-btn" class="btn btn-primary" onclick="App.syncGithub()">同步 GitHub</button>
+                    </div>
+                    <div id="gh-sync-status"></div>
+                </div>
+            </div>
+            <div class="panel-card" style="margin-top:16px">
+                <h3 class="panel-title">Excel 数据导入</h3>
+                <div class="import-form">
+                    <div class="form-row-inline">
+                        <input type="text" id="import-path" class="input" style="flex:1" placeholder="Excel 文件或目录路径">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="import-dryrun"> 仅预览
+                        </label>
+                        <button id="import-btn" class="btn btn-primary">开始导入</button>
+                    </div>
+                    <div id="import-status"></div>
+                </div>
+            </div>
+            <div class="panel-card" style="margin-top:16px">
+                <h3 class="panel-title">导入历史</h3>
+                <div id="import-history"><div class="empty-state">加载中...</div></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- ═══ 日期详情弹窗 ═══ -->
+    <div id="day-modal" class="modal-overlay" onclick="if(event.target===this)App.closeDayModal()">
+        <div class="modal day-modal">
+            <div class="modal-header">
+                <h2 id="day-modal-title">3月21日 星期五</h2>
+                <button class="btn-close" onclick="App.closeDayModal()">&times;</button>
+            </div>
+            <div class="day-modal-body">
+                <div id="day-entries-list" class="day-entries-list"></div>
+                <div class="quick-input-area">
+                    <textarea id="quick-input" class="input quick-textarea" rows="2" placeholder="写点什么... 回车保存，不选分类会自动AI分类"></textarea>
+                    <div class="quick-input-actions">
+                        <select id="quick-category" class="input input-sm"><option value="">AI自动分类</option></select>
+                        <button id="quick-save-btn" class="btn btn-primary btn-sm">保存</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ 编辑弹窗 ═══ -->
+    <div id="entry-modal" class="modal-overlay" onclick="if(event.target===this)App.closeModal()">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="modal-title">编辑</h2>
+                <button class="btn-close" onclick="App.closeModal()">&times;</button>
+            </div>
+            <form id="entry-form" class="modal-body">
+                <div class="form-stack">
+                    <div class="form-field">
+                        <label>内容</label>
+                        <textarea name="content" required class="input" rows="3" placeholder="活动内容..."></textarea>
+                    </div>
+                    <div class="form-row-inline">
+                        <div class="form-field">
+                            <label>分类</label>
+                            <select name="category" class="input"></select>
+                        </div>
+                        <div class="form-field" style="align-self:end">
+                            <label class="checkbox-label" style="padding:8px 0">
+                                <input type="checkbox" name="is_done"> 已完成
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-field">
+                        <label>备注</label>
+                        <textarea name="notes" class="input" rows="2" placeholder="可选备注..."></textarea>
+                    </div>
+                </div>
+                <input type="hidden" name="date">
+                <div class="modal-footer">
+                    <button type="button" class="btn" onclick="App.closeModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/charts.js"></script>
+    <script src="/static/js/calendar.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

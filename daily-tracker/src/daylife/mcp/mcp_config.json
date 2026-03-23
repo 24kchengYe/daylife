@@ -1,0 +1,12 @@
+{
+  "server": {
+    "name": "DayLife",
+    "description": "每日活动记录与统计系统",
+    "version": "0.1.0",
+    "transport": "stdio"
+  },
+  "database": {
+    "path": null,
+    "comment": "数据库路径。null 表示使用默认路径 ~/.local/share/daylife/daylife.db，也可通过环境变量 DAYLIFE_DB_PATH 覆盖"
+  }
+}

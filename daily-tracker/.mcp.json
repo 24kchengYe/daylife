@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "daylife": {
+      "command": "python",
+      "args": ["-m", "daylife.mcp"],
+      "cwd": "D:/pythonPycharms/工具开发/061daylife/daily-tracker",
+      "env": {
+        "PYTHONPATH": "D:/pythonPycharms/工具开发/061daylife/daily-tracker/src"
+      }
+    }
+  }
+}

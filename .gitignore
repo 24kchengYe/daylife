@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Node/Electron
+daily-tracker/desktop/node_modules/
+daily-tracker/desktop/dist/
+daily-tracker/desktop/out/
+
+# Database (备份到 backup/ 目录)
+*.db
+*.db-wal
+*.db-shm
+
+# Env
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backup data (这个目录会存数据库备份)
+# 不忽略 backup/ 目录本身，但忽略里面的临时文件
