@@ -1,10 +1,20 @@
 /**
- * DayLife API 客户端
+ * DayLife API 客户端 — 支持请求取消 + TTL 缓存
  */
 const API = {
     BASE: '/api',
 
-    async request(url, options = {}) {
+    // ── 请求取消支持 ──
+    _controllers: {},
+    _cache: {},
+
+    async request(url, options = {}, tag = null) {
+        // 带 tag 的请求支持取消（同 tag 新请求会取消旧请求）
+        if (tag) {
+            if (this._controllers[tag]) this._controllers[tag].abort();
+            this._controllers[tag] = new AbortController();
+            options.signal = this._controllers[tag].signal;
+        }
         try {
             const resp = await fetch(this.BASE + url, {
                 headers: { 'Content-Type': 'application/json', ...options.headers },
@@ -17,10 +27,34 @@ const API = {
             }
             return json.data;
         } catch (e) {
+            if (e.name === 'AbortError') return null; // 被取消的请求静默处理
             console.error('Request failed:', url, e);
             return null;
         }
     },
+
+    /** 带 TTL 缓存的请求 */
+    async cachedRequest(url, ttlMs = 30000) {
+        const now = Date.now();
+        const cached = this._cache[url];
+        if (cached && now - cached.time < ttlMs) {
+            return cached.data;
+        }
+        const data = await this.request(url);
+        if (data !== null) {
+            this._cache[url] = { data, time: now };
+        }
+        return data;
+    },
+
+    /** 取消所有带 tag 的请求 */
+    cancelAll() {
+        Object.values(this._controllers).forEach(c => c.abort());
+        this._controllers = {};
+    },
+
+    /** 清除缓存 */
+    clearCache() { this._cache = {}; },
 
     // ── 活动记录 ──
     async getEntries(params = {}) {
@@ -34,7 +68,7 @@ const API = {
         return this.request('/entries?date=' + date);
     },
     async searchEntries(keyword, limit = 50) {
-        return this.request(`/entries/search?q=${encodeURIComponent(keyword)}&limit=${limit}`);
+        return this.request(`/entries/search?q=${encodeURIComponent(keyword)}&limit=${limit}`, {}, 'search');
     },
     async createEntry(data) {
         return this.request('/entries', { method: 'POST', body: JSON.stringify(data) });
@@ -46,33 +80,34 @@ const API = {
         return this.request(`/entries/${id}`, { method: 'DELETE' });
     },
 
-    // ── 分类 ──
-    async getCategories() { return this.request('/categories'); },
+    // ── 分类（缓存 30s）──
+    async getCategories() { return this.cachedRequest('/categories'); },
 
     // ── 统计 ──
     async getDailyStats(date) { return this.request('/stats/daily' + (date ? `?date=${date}` : '')); },
     async getHeatmap(year) { return this.request('/stats/heatmap' + (year ? `?year=${year}` : '')); },
+    async getHeatmapDetail(year) { return this.request('/stats/heatmap-detail' + (year ? `?year=${year}` : ''), {}, 'heatmap'); },
     async getCategoryStats(start, end) {
         const qs = new URLSearchParams();
         if (start) qs.set('start', start);
         if (end) qs.set('end', end);
-        return this.request('/stats/category?' + qs.toString());
+        return this.request('/stats/category?' + qs.toString(), {}, 'category-stats');
     },
     async getTrend(start, end, interval = 'day') {
         const qs = new URLSearchParams();
         if (start) qs.set('start', start);
         if (end) qs.set('end', end);
         qs.set('interval', interval);
-        return this.request('/stats/trend?' + qs.toString());
+        return this.request('/stats/trend?' + qs.toString(), {}, 'trend');
     },
     async getCompletion(start, end) {
         const qs = new URLSearchParams();
         if (start) qs.set('start', start);
         if (end) qs.set('end', end);
-        return this.request('/stats/completion?' + qs.toString());
+        return this.request('/stats/completion?' + qs.toString(), {}, 'completion');
     },
-    async getStreak() { return this.request('/stats/streak'); },
-    async getYearlySummary(year) { return this.request('/stats/yearly-summary' + (year ? `?year=${year}` : '')); },
+    async getStreak() { return this.cachedRequest('/stats/streak', 60000); },
+    async getYearlySummary(year) { return this.cachedRequest('/stats/yearly-summary' + (year ? `?year=${year}` : ''), 60000); },
 
     // ── 导入 ──
     async triggerImport(filePath, dryRun = false) {
@@ -129,8 +164,8 @@ const API = {
     async deleteTag(tagId) {
         return this.request(`/tags/${tagId}`, { method: 'DELETE' });
     },
-    async getTagEntries(tagId) {
-        return this.request(`/tags/${tagId}/entries?limit=9999`);
+    async getTagEntries(tagId, page = 1, limit = 200) {
+        return this.request(`/tags/${tagId}/entries?page=${page}&limit=${limit}`);
     },
     async aiBatchTag(tagId, mode = 'keyword') {
         return this.request(`/tags/${tagId}/ai-batch?mode=${mode}`);

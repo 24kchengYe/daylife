@@ -48,6 +48,27 @@ def get_heatmap(
         session.close()
 
 
+@router.get("/heatmap-detail", response_model=ApiResponse)
+def get_heatmap_detail(
+    year: int | None = Query(None, description="年份，默认今年"),
+):
+    """轻量版热力图：按分类聚合，不返回 content（KB 级响应替代 MB 级）"""
+    from datetime import date as date_cls
+    y = year or date_cls.today().year
+    date_from = date_cls(y, 1, 1)
+    date_to = date_cls(y, 12, 31)
+
+    session = get_session()
+    try:
+        svc = StatsService(session)
+        items = svc.get_heatmap_by_category(date_from, date_to)
+        for item in items:
+            item["date"] = item["date"].isoformat()
+        return ApiResponse(data=items)
+    finally:
+        session.close()
+
+
 @router.get("/category", response_model=ApiResponse)
 def get_category_stats(
     start: date | None = Query(None, description="起始日期"),

@@ -3,10 +3,12 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from daylife.api.routes.entries import router as entries_router
 from daylife.api.routes.stats import router as stats_router
@@ -18,6 +20,17 @@ from daylife.api.routes.reports import router as reports_router
 from daylife.api.routes.tags import router as tags_router
 from daylife.api.routes.voice import router as voice_router
 from daylife.core.database import init_db
+
+
+class CacheHeaderMiddleware(BaseHTTPMiddleware):
+    """为统计和分类等低频变动的 API 添加缓存头"""
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        path = request.url.path
+        if path.startswith("/api/stats/") or path == "/api/categories":
+            response.headers["Cache-Control"] = "public, max-age=60"
+        return response
+
 
 # 前端静态文件目录
 WEB_DIR = Path(__file__).resolve().parent.parent.parent / "web"
@@ -37,6 +50,8 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    app.add_middleware(GZipMiddleware, minimum_size=500)
+    app.add_middleware(CacheHeaderMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[

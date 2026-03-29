@@ -17,21 +17,25 @@ TAG_MODEL = "minimax/minimax-01"
 
 @router.get("", response_model=ApiResponse)
 def list_tags():
-    """列出所有标签及其条目数"""
+    """列出所有标签及其条目数 — 单次 LEFT JOIN 查询"""
     session = get_session()
     try:
-        tags = session.query(Tag).all()
-        result = []
-        for t in tags:
-            count = (
-                session.query(sqlfunc.count(entry_tags.c.entry_id))
-                .filter(entry_tags.c.tag_id == t.id)
-                .scalar() or 0
+        rows = (
+            session.query(
+                Tag,
+                sqlfunc.count(entry_tags.c.entry_id).label("cnt"),
             )
-            result.append(TagDetailOut(
+            .outerjoin(entry_tags, Tag.id == entry_tags.c.tag_id)
+            .group_by(Tag.id)
+            .all()
+        )
+        result = [
+            TagDetailOut(
                 id=t.id, name=t.name, color=t.color,
-                description=t.description, entry_count=count,
-            ))
+                description=t.description, entry_count=cnt,
+            )
+            for t, cnt in rows
+        ]
         return ApiResponse(data=[r.model_dump() for r in result])
     finally:
         session.close()

@@ -102,7 +102,6 @@ const Calendar = {
     renderMonthGrid() {
         const tbody = document.getElementById('calendar-body');
         if (!tbody) return;
-        tbody.innerHTML = '';
 
         const year = this.currentYear, month = this.currentMonth;
         const totalDays = new Date(year, month + 1, 0).getDate();
@@ -111,17 +110,14 @@ const Calendar = {
         const todayStr = this.fmtDate(new Date());
 
         const cells = [];
-        // 上月填充
         const prevLast = new Date(year, month, 0).getDate();
         for (let i = startDow - 1; i >= 0; i--) {
             const d = prevLast - i;
             cells.push({ day: d, dateStr: this.fmtDate(new Date(year, month - 1, d)), outside: true });
         }
-        // 本月
         for (let d = 1; d <= totalDays; d++) {
             cells.push({ day: d, dateStr: this.fmtDate(new Date(year, month, d)), outside: false });
         }
-        // 下月填充
         const rem = 7 - (cells.length % 7);
         if (rem < 7) {
             for (let d = 1; d <= rem; d++) {
@@ -129,79 +125,59 @@ const Calendar = {
             }
         }
 
+        // 构建 HTML 字符串（单次 innerHTML，减少 350+ DOM 操作）
+        let html = '';
         for (let i = 0; i < cells.length; i += 7) {
-            const tr = document.createElement('tr');
+            html += '<tr>';
             for (let j = 0; j < 7; j++) {
                 const c = cells[i + j];
-                const td = document.createElement('td');
-                td.className = 'cal-cell';
-                if (c.outside) td.classList.add('outside');
-                if (c.dateStr === todayStr) td.classList.add('today');
-                if (j >= 5) td.classList.add('weekend');
-
                 const entries = this.monthEntries[c.dateStr] || [];
                 const subs = this.toItems(entries);
                 const n = subs.length;
+                const cls = ['cal-cell'];
+                if (c.outside) cls.push('outside');
+                if (c.dateStr === todayStr) cls.push('today');
+                if (j >= 5) cls.push('weekend');
 
-                // inner div 固定高度
-                const inner = document.createElement('div');
-                inner.className = 'cal-inner';
-
-                // 日期行：数字 + badge + 分类色块（同一行）
-                const dn = document.createElement('div');
-                dn.className = 'cal-day-num';
-                dn.textContent = c.day;
-                if (n > 0) {
-                    const b = document.createElement('span');
-                    b.className = 'cal-badge';
-                    b.textContent = n;
-                    dn.appendChild(b);
-                }
-                // 分类色块（紧跟 badge 后面）
+                html += `<td class="${cls.join(' ')}" data-date="${c.dateStr}"><div class="cal-inner">`;
+                html += `<div class="cal-day-num">${c.day}`;
+                if (n > 0) html += `<span class="cal-badge">${n}</span>`;
                 if (n > 0 && !c.outside) {
                     const cc = {};
                     subs.forEach(s => { cc[s.category] = (cc[s.category] || 0) + 1; });
-                    const cr = document.createElement('span');
-                    cr.className = 'cal-cats';
+                    html += '<span class="cal-cats">';
                     this.CATEGORY_ORDER.forEach(cat => {
-                        const bl = document.createElement('span');
-                        bl.className = 'cat-block';
                         const cnt = cc[cat] || 0;
                         if (cnt > 0) {
-                            bl.style.background = this.CATEGORY_COLORS[cat];
-                            bl.style.opacity = Math.min(0.4 + cnt * 0.2, 1);
-                            bl.title = `${cat}: ${cnt}条`;
+                            html += `<span class="cat-block" style="background:${this.CATEGORY_COLORS[cat]};opacity:${Math.min(0.4 + cnt * 0.2, 1)}" title="${cat}: ${cnt}条"></span>`;
                         } else {
-                            bl.style.background = 'var(--border-light)';
+                            html += `<span class="cat-block" style="background:var(--border-light)"></span>`;
                         }
-                        cr.appendChild(bl);
                     });
-                    dn.appendChild(cr);
+                    html += '</span>';
                 }
-                inner.appendChild(dn);
-
-                // 内容预览
+                html += '</div>';
                 if (n > 0 && !c.outside) {
-                    const pv = document.createElement('div');
-                    pv.className = 'cal-preview';
+                    html += '<div class="cal-preview">';
                     subs.forEach(item => {
-                        const ln = document.createElement('div');
                         const isGh = item.text.startsWith('[GitHub]');
                         const sc = item.status === 'completed' ? 'is-done' : item.status === 'incomplete' ? 'is-fail' : '';
-                        ln.className = 'cal-preview-item ' + sc + (isGh ? ' is-github' : '');
                         const sd = isGh ? 'dot-github' : (item.status === 'completed' ? 'dot-done' : item.status === 'incomplete' ? 'dot-fail' : 'dot-progress');
-                        ln.innerHTML = `<span class="cal-dot ${sd}"></span><span class="cal-preview-text">${this.esc(item.text)}</span>`;
-                        pv.appendChild(ln);
+                        html += `<div class="cal-preview-item ${sc}${isGh ? ' is-github' : ''}"><span class="cal-dot ${sd}"></span><span class="cal-preview-text">${this.esc(item.text)}</span></div>`;
                     });
-                    inner.appendChild(pv);
+                    html += '</div>';
                 }
-
-                td.appendChild(inner);
-                td.onclick = () => { if (this.onDayClick) this.onDayClick(c.dateStr); };
-                tr.appendChild(td);
+                html += '</div></td>';
             }
-            tbody.appendChild(tr);
+            html += '</tr>';
         }
+        tbody.innerHTML = html;
+
+        // 事件委托（1 个监听器替代 42 个 onclick）
+        tbody.onclick = (e) => {
+            const td = e.target.closest('.cal-cell');
+            if (td && td.dataset.date && this.onDayClick) this.onDayClick(td.dataset.date);
+        };
     },
 
     // ═══ 年度热力图（分类多行，无星期标签） ═══
@@ -218,16 +194,16 @@ const Calendar = {
     },
 
     async loadHeatmapYear(year) {
-        const data = await API.getEntries({ start: `${year}-01-01`, end: `${year}-12-31`, limit: 9999 });
+        // 使用轻量 API：只获取聚合数据（KB 级），不获取完整 content（MB 级）
+        const data = await API.getHeatmapDetail(year);
         this.heatmapYearItems = {};
-        if (data && data.items) {
-            const byDate = {};
-            data.items.forEach(e => {
-                if (!byDate[e.date]) byDate[e.date] = [];
-                byDate[e.date].push(e);
-            });
-            for (const [ds, es] of Object.entries(byDate)) {
-                this.heatmapYearItems[ds] = this.toItems(es);
+        if (data && Array.isArray(data)) {
+            for (const r of data) {
+                if (!this.heatmapYearItems[r.date]) this.heatmapYearItems[r.date] = [];
+                this.heatmapYearItems[r.date].push({
+                    cat: r.category, color: r.color, icon: r.icon,
+                    count: r.count, done: r.status === 'completed',
+                });
             }
         }
         this.renderHeatmap(year);

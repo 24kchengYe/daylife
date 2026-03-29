@@ -168,13 +168,13 @@ class EntryService:
 
     def batch_create(self, entries_data: list[EntryCreate]) -> list[DailyEntry]:
         """批量创建记录（用于数据导入等场景）"""
+        # 预加载所有分类到缓存，避免循环查询
+        _cat_cache = {c.name: c.id for c in crud.list_categories(self.session)}
         results = []
         for data in entries_data:
             category_id = None
             if data.category:
-                cat = crud.get_category_by_name(self.session, data.category)
-                if cat:
-                    category_id = cat.id
+                category_id = _cat_cache.get(data.category)
 
             duration = data.duration_minutes
             if duration is None and data.start_time and data.end_time:

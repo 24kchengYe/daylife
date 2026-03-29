@@ -7,6 +7,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Table,
@@ -75,9 +76,14 @@ class DailyEntry(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
-    category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id"))
+    category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id"), index=True)
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    status: Mapped[str | None] = mapped_column(String(20), default="completed")
+    status: Mapped[str | None] = mapped_column(String(20), default="completed", index=True)
+
+    __table_args__ = (
+        Index("ix_entries_date_category", "date", "category_id"),
+        Index("ix_entries_date_status", "date", "status"),
+    )
     start_time: Mapped[time | None] = mapped_column(Time)
     end_time: Mapped[time | None] = mapped_column(Time)
     duration_minutes: Mapped[int | None] = mapped_column(Integer)

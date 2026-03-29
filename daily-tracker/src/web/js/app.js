@@ -1,7 +1,13 @@
 /**
  * DayLife 主控制器
  */
+function debounce(fn, ms) {
+    let timer;
+    return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
+}
+
 const App = {
+    _abortFlags: {},  // 轮询取消标志
     currentView: 'dashboard',
     isDark: false,
     categories: [],
@@ -42,10 +48,12 @@ const App = {
             });
         }
 
-        // Search
+        // Search（防抖 300ms）
         const si = document.getElementById('search-input');
+        const debouncedSearch = debounce(() => this.doSearch(si.value), 300);
         document.getElementById('search-btn')?.addEventListener('click', () => this.doSearch(si.value));
         si?.addEventListener('keydown', e => { if (e.key === 'Enter') this.doSearch(si.value); });
+        si?.addEventListener('input', debouncedSearch);
 
         // Import
         document.getElementById('import-btn')?.addEventListener('click', () => this.triggerImport());
@@ -80,6 +88,10 @@ const App = {
 
     // ── Views ──
     switchView(view) {
+        // 取消旧视图的进行中请求和轮询
+        API.cancelAll();
+        Object.keys(this._abortFlags).forEach(k => { this._abortFlags[k] = true; });
+
         this.currentView = view;
         document.querySelectorAll('.view-panel').forEach(el => {
             el.classList.toggle('active', el.dataset.view === view);
@@ -88,8 +100,19 @@ const App = {
             el.classList.toggle('nav-active', el.dataset.nav === view);
         });
         if (view === 'stats') {
-            this.refreshStats();
-            Calendar.loadHeatmapYear(parseInt(document.getElementById('heatmap-year')?.value || Calendar.currentYear));
+            // ECharts 按需加载
+            if (!window.echarts) {
+                const s = document.createElement('script');
+                s.src = '/static/js/echarts.min.js';
+                s.onload = () => {
+                    this.refreshStats();
+                    Calendar.loadHeatmapYear(parseInt(document.getElementById('heatmap-year')?.value || Calendar.currentYear));
+                };
+                document.head.appendChild(s);
+            } else {
+                this.refreshStats();
+                Calendar.loadHeatmapYear(parseInt(document.getElementById('heatmap-year')?.value || Calendar.currentYear));
+            }
         }
         if (view === 'search') document.getElementById('search-input')?.focus();
         if (view === 'reports') this.loadReportTree();

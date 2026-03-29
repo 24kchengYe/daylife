@@ -101,7 +101,19 @@ def search_entries(
     )
 
     if keyword:
-        q = q.filter(DailyEntry.content.contains(keyword))
+        # 优先使用 FTS5 全文搜索索引，回退到 LIKE
+        try:
+            from sqlalchemy import text
+            fts_ids = session.execute(
+                text("SELECT rowid FROM entries_fts WHERE entries_fts MATCH :q"),
+                {"q": keyword}
+            ).scalars().all()
+            if fts_ids:
+                q = q.filter(DailyEntry.id.in_(fts_ids))
+            else:
+                q = q.filter(DailyEntry.content.contains(keyword))
+        except Exception:
+            q = q.filter(DailyEntry.content.contains(keyword))
     if date_from:
         q = q.filter(DailyEntry.date >= date_from)
     if date_to:

@@ -1,0 +1,19 @@
+{
+  "identifier": "default",
+  "description": "DayLife default capabilities",
+  "windows": ["*"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-create",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-close",
+    "core:window:allow-set-position",
+    "core:window:allow-set-focus",
+    "core:window:allow-set-always-on-top",
+    "shell:allow-spawn",
+    "shell:allow-execute",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister"
+  ]
+}
