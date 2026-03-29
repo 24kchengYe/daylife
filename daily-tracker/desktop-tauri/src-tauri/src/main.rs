@@ -13,10 +13,11 @@ use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 use tauri::{
-    AppHandle, Manager, WebviewUrl, WebviewWindowBuilder,
+    AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
 };
+use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
 const PORT: u16 = 8263;
 const SERVER_URL: &str = "http://127.0.0.1:8263";
@@ -228,16 +229,15 @@ fn main() {
 
             // 全局快捷键
             use tauri_plugin_global_shortcut::ShortcutState;
-            app.global_shortcut().on_shortcut("Alt+D", move |_app, shortcut, event| {
+            app.global_shortcut().on_shortcut("Alt+D", move |app: &AppHandle, _shortcut, event| {
                 if event.state == ShortcutState::Pressed {
-                    toggle_panel(_app.clone());
+                    toggle_panel(app.clone());
                 }
             })?;
 
-            let handle2 = app.handle().clone();
-            app.global_shortcut().on_shortcut("Alt+Shift+D", move |_app, _shortcut, event| {
+            app.global_shortcut().on_shortcut("Alt+Shift+D", move |app: &AppHandle, _shortcut, event| {
                 if event.state == ShortcutState::Pressed {
-                    open_full(_app.clone());
+                    open_full(app.clone());
                 }
             })?;
 

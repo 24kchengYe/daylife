@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+:root {
+    --bg: #1a1a2e;
+    --bg2: #16213e;
+    --bg3: #0f3460;
+    --text: #e0e0e0;
+    --text2: #9ca3af;
+    --accent: #7c83ff;
+    --accent2: #a78bfa;
+    --green: #34d399;
+    --red: #f87171;
+    --border: #2d2d44;
+    --radius: 10px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+    background: transparent; font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    color: var(--text); font-size: 13px; overflow: hidden;
+    height: 100%;
+}
+.panel {
+    background: var(--bg); border-radius: 16px;
+    border: 1px solid var(--border);
+    box-shadow: 0 8px 32px rgba(0,0,0,.5);
+    display: flex; flex-direction: column;
+    height: 100%; overflow: hidden;
+}
+/* ── 标题栏（可拖动） ── */
+.titlebar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; -webkit-app-region: drag;
+    background: var(--bg2); border-bottom: 1px solid var(--border);
+    border-radius: 16px 16px 0 0;
+}
+.titlebar-left { display: flex; align-items: center; gap: 8px; }
+.titlebar-logo { font-size: 14px; font-weight: 800; color: var(--accent); letter-spacing: -.5px; }
+.titlebar-date { font-size: 11px; color: var(--text2); }
+.titlebar-actions { display: flex; gap: 4px; -webkit-app-region: no-drag; }
+.titlebar-btn {
+    width: 28px; height: 28px; border-radius: 6px; border: none;
+    background: transparent; color: var(--text2); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; transition: all .15s;
+}
+.titlebar-btn:hover { background: var(--bg3); color: var(--text); }
+
+/* ── 内容区 ── */
+.content { flex: 1; overflow-y: auto; padding: 12px; }
+
+/* ── 今日摘要 ── */
+.today-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+}
+.today-label { font-size: 15px; font-weight: 700; color: var(--accent2); }
+.today-count {
+    font-size: 11px; color: var(--text2);
+    background: var(--bg3); padding: 2px 8px; border-radius: 10px;
+}
+
+/* ── 条目列表 ── */
+.entry-list { display: flex; flex-direction: column; gap: 4px; }
+.entry-item {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 8px 10px; border-radius: 8px;
+    transition: background .1s; cursor: default;
+}
+.entry-item:hover { background: var(--bg2); }
+.entry-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    margin-top: 4px; flex-shrink: 0;
+}
+.entry-text { flex: 1; line-height: 1.5; word-break: break-word; }
+.entry-cat {
+    font-size: 10px; color: var(--text2);
+    background: var(--bg3); padding: 1px 6px; border-radius: 4px;
+    white-space: nowrap; margin-top: 2px;
+}
+.entry-done .entry-text { text-decoration: line-through; color: var(--text2); }
+
+/* ── 快捷输入 ── */
+.quick-bar {
+    padding: 10px 12px; border-top: 1px solid var(--border);
+    background: var(--bg2); border-radius: 0 0 16px 16px;
+}
+.quick-input {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+    border-radius: 8px; background: var(--bg); color: var(--text);
+    font-size: 13px; outline: none; resize: none;
+    font-family: inherit;
+}
+.quick-input:focus { border-color: var(--accent); }
+.quick-input::placeholder { color: var(--text2); }
+.quick-bottom { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
+.quick-select {
+    background: var(--bg); color: var(--text2); border: 1px solid var(--border);
+    border-radius: 4px; padding: 2px 6px; font-size: 11px; outline: none; cursor: pointer;
+}
+.quick-select:focus { border-color: var(--accent); }
+.quick-hint { font-size: 10px; color: var(--text2); }
+
+/* ── 空状态 ── */
+.empty {
+    text-align: center; padding: 40px 20px; color: var(--text2);
+}
+.empty-icon { font-size: 32px; margin-bottom: 8px; }
+
+/* ── 底部链接 ── */
+.footer-link {
+    display: block; text-align: center; padding: 6px;
+    font-size: 11px; color: var(--accent); cursor: pointer;
+    text-decoration: none; border-top: 1px solid var(--border);
+}
+.footer-link:hover { color: var(--accent2); background: var(--bg2); }
+
+/* mic button */
+.mic-btn {
+    width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); cursor: pointer;
+    font-size: 14px; display: flex; align-items: center; justify-content: center;
+    transition: all .2s; flex-shrink: 0;
+}
+.mic-btn:hover { background: var(--bg3); border-color: var(--accent); }
+.mic-btn.recording {
+    background: var(--red); border-color: var(--red); color: #fff;
+    animation: mic-pulse 1s infinite;
+}
+@keyframes mic-pulse {
+    0%, 100% { box-shadow: 0 0 4px rgba(248,113,113,.4); }
+    50% { box-shadow: 0 0 12px rgba(248,113,113,.7); }
+}
+
+/* scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="panel">
+    <div class="titlebar">
+        <div class="titlebar-left">
+            <span class="titlebar-logo">DayLife</span>
+            <span class="titlebar-date" id="title-date"></span>
+        </div>
+        <div class="titlebar-actions">
+            <button class="titlebar-btn" onclick="openFullView()" title="浏览器打开">↗</button>
+            <button class="titlebar-btn" onclick="closePanel()" title="收起">─</button>
+        </div>
+    </div>
+
+    <div class="content" id="content">
+        <div class="today-header">
+            <span class="today-label" id="today-label">今天</span>
+            <span class="today-count" id="today-count">0 条</span>
+        </div>
+        <div class="entry-list" id="entry-list">
+            <div class="empty">
+                <div class="empty-icon">📝</div>
+                <div>加载中...</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="quick-bar">
+        <div style="display:flex;gap:6px;align-items:flex-start">
+            <textarea class="quick-input" id="quick-input" rows="1" placeholder="记录一下..." style="flex:1"></textarea>
+            <button id="panel-mic-btn" class="mic-btn" onclick="togglePanelVoice()" title="语音输入">🎤</button>
+        </div>
+        <div class="quick-bottom">
+            <select id="quick-cat" class="quick-select">
+                <option value="">AI分类</option>
+                <option value="学习">📚 学习</option>
+                <option value="科研">🔬 科研</option>
+                <option value="编程">💻 编程</option>
+                <option value="运动">🏃 运动</option>
+                <option value="生活">🏠 生活</option>
+                <option value="社交">👥 社交</option>
+                <option value="工作">💼 工作</option>
+                <option value="娱乐">🎮 娱乐</option>
+                <option value="休息">😴 休息</option>
+            </select>
+            <span class="quick-hint">回车保存</span>
+        </div>
+    </div>
+
+    <a class="footer-link" onclick="openFullView()">打开完整日历 →</a>
+</div>
+
+<script>
+const API_BASE = 'http://127.0.0.1:8263/api';
+
+const catColors = {
+    '学习':'#4A90D9','科研':'#7B68EE','编程':'#00BCD4','运动':'#2ECC71',
+    '生活':'#F39C12','社交':'#FF6B6B','工作':'#E74C3C','娱乐':'#9B59B6',
+    '休息':'#95A5A6',
+};
+
+function today() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function formatDate(d) {
+    const days = ['日','一','二','三','四','五','六'];
+    const dt = new Date(d + 'T00:00:00');
+    return `${dt.getMonth()+1}月${dt.getDate()}日 星期${days[dt.getDay()]}`;
+}
+
+async function api(url) {
+    try {
+        const r = await fetch(API_BASE + url, { headers: { 'Content-Type': 'application/json' } });
+        const j = await r.json();
+        return j.code === 0 ? j.data : null;
+    } catch { return null; }
+}
+
+async function loadToday() {
+    const d = today();
+    document.getElementById('title-date').textContent = formatDate(d);
+    document.getElementById('today-label').textContent = formatDate(d);
+
+    const data = await api(`/entries?date=${d}`);
+    const entries = data?.items || [];
+    document.getElementById('today-count').textContent = `${entries.length} 条`;
+
+    const list = document.getElementById('entry-list');
+    if (!entries.length) {
+        list.innerHTML = '<div class="empty"><div class="empty-icon">✨</div><div>今天还没有记录</div></div>';
+        return;
+    }
+
+    list.innerHTML = entries.map(e => {
+        const cat = e.category || {};
+        const color = catColors[cat.name] || '#888';
+        const isDone = e.status === 'completed';
+        return `<div class="entry-item ${isDone ? 'entry-done' : ''}">
+            <span class="entry-dot" style="background:${color}"></span>
+            <div>
+                <div class="entry-text">${esc(e.content)}</div>
+                ${cat.name ? `<span class="entry-cat">${cat.icon||''} ${cat.name}</span>` : ''}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+async function quickSave(content) {
+    const cat = document.getElementById('quick-cat').value || null;
+    await fetch(API_BASE + '/entries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            date: today(), content, category: cat, status: 'completed', source: 'desktop',
+        }),
+    });
+    document.getElementById('quick-cat').value = '';
+    loadToday();
+}
+
+function closePanel() {
+    if (window.__TAURI__) window.__TAURI__.core.invoke('close_panel');
+    else if (window.daylife) window.daylife.togglePanel();
+}
+
+function openFullView() {
+    if (window.__TAURI__) window.__TAURI__.core.invoke('open_full');
+    else if (window.daylife) window.daylife.openFull();
+    else window.open('http://127.0.0.1:8263', '_blank');
+}
+
+function esc(t) {
+    if (!t) return '';
+    const d = document.createElement('div');
+    d.textContent = t;
+    return d.innerHTML;
+}
+
+// 快捷输入
+document.getElementById('quick-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        const v = e.target.value.trim();
+        if (v) { quickSave(v); e.target.value = ''; }
+    }
+});
+
+// 自动调整输入框高度
+document.getElementById('quick-input').addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 80) + 'px';
+});
+
+// ── 语音录入 ──
+let _recorder = null;
+let _audioChunks = [];
+let _isRecording = false;
+
+async function togglePanelVoice() {
+    if (_isRecording) {
+        stopPanelVoice();
+    } else {
+        startPanelVoice();
+    }
+}
+
+async function startPanelVoice() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        _recorder = new MediaRecorder(stream);
+        _audioChunks = [];
+        _recorder.ondataavailable = (e) => {
+            if (e.data.size > 0) _audioChunks.push(e.data);
+        };
+        _recorder.onstop = async () => {
+            stream.getTracks().forEach(t => t.stop());
+            const blob = new Blob(_audioChunks, { type: 'audio/webm' });
+            const btn = document.getElementById('panel-mic-btn');
+            btn.textContent = '...';
+            btn.classList.remove('recording');
+
+            const formData = new FormData();
+            formData.append('file', blob, 'recording.webm');
+            try {
+                const resp = await fetch(API_BASE + '/voice/transcribe', { method: 'POST', body: formData });
+                const json = await resp.json();
+                if (json.code === 0 && json.data?.text) {
+                    const input = document.getElementById('quick-input');
+                    input.value = (input.value ? input.value + ' ' : '') + json.data.text;
+                    input.focus();
+                }
+            } catch (e) { console.error('Voice failed:', e); }
+            btn.textContent = '🎤';
+        };
+        _recorder.start();
+        _isRecording = true;
+        const btn = document.getElementById('panel-mic-btn');
+        btn.textContent = '⏹';
+        btn.classList.add('recording');
+    } catch (e) { console.error('Mic error:', e); }
+}
+
+function stopPanelVoice() {
+    if (_recorder && _recorder.state === 'recording') _recorder.stop();
+    _isRecording = false;
+}
+
+// 全局热键触发入口
+function startVoiceFromHotkey() {
+    if (!_isRecording) startPanelVoice();
+}
+
+// 启动
+loadToday();
+// 每分钟刷新
+setInterval(loadToday, 60000);
+</script>
+</body>
+</html>
