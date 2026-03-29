@@ -37,7 +37,7 @@ def create_icon_image():
 
 
 class DayLifeTray:
-    def __init__(self, host='127.0.0.1', port=8063):
+    def __init__(self, host='127.0.0.1', port=8263):
         self.host = host
         self.port = port
         self.url = f'http://{host}:{port}'
@@ -103,7 +103,7 @@ class DayLifeTray:
         icon.run()
 
 
-def main(host='127.0.0.1', port=8063):
+def main(host='127.0.0.1', port=8263):
     tray = DayLifeTray(host, port)
     tray.run()
 

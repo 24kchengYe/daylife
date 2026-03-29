@@ -12,7 +12,7 @@ _CONFIG_SEARCH_PATHS = [
 # 默认配置
 _DEFAULTS = {
     "database": {"path": None, "wal_mode": True},
-    "web": {"host": "127.0.0.1", "port": 8063, "reload": False},
+    "web": {"host": "127.0.0.1", "port": 8263, "reload": False},
     "mcp": {"transport": "stdio"},
     "import": {"excel_path": "D:/my college/zyc学习计划/"},
     "display": {"date_format": "iso", "language": "zh", "page_size": 20},

@@ -57,7 +57,7 @@ def main():
     parser.add_argument("--import", dest="run_import", action="store_true", help="运行数据导入")
     parser.add_argument("--dry-run", action="store_true", help="导入预览模式（配合 --import）")
     parser.add_argument("--host", default="127.0.0.1", help="Web 绑定地址（默认 127.0.0.1）")
-    parser.add_argument("--port", type=int, default=8063, help="Web 端口（默认 8063）")
+    parser.add_argument("--port", type=int, default=8263, help="Web 端口（默认 8263）")
     parser.add_argument(
         "--excel-path",
         default="D:/my college/zyc学习计划/",

@@ -416,7 +416,7 @@ def import_cmd(path, dry_run, probe, db_path, verbose):
 
 
 @cli.command()
-@click.option("-p", "--port", default=8063, type=int, help="端口号（默认8063）")
+@click.option("-p", "--port", default=8263, type=int, help="端口号（默认8263）")
 @click.option("-h", "--host", "bind_host", default="127.0.0.1", help="绑定地址（默认127.0.0.1）")
 @click.option("--reload", is_flag=True, help="开发模式热重载")
 def serve(port, bind_host, reload):
@@ -441,7 +441,7 @@ def serve(port, bind_host, reload):
 
 
 @cli.command()
-@click.option("-p", "--port", default=8063, type=int, help="端口号")
+@click.option("-p", "--port", default=8263, type=int, help="端口号")
 def tray(port):
     """托盘模式：后台服务 + 系统托盘图标
 

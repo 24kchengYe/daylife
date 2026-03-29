@@ -19,7 +19,7 @@ let panelWin = null;
 let fullWin = null;
 let tray = null;
 let serverProcess = null;
-const PORT = 8063;
+const PORT = 8263;
 const SERVER_URL = `http://127.0.0.1:${PORT}`;
 
 // ═══ 启动后端服务 ═══
