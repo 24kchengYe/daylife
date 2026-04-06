@@ -1,16 +1,16 @@
 const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, screen, nativeImage } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { spawn } = require('child_process');
 const http = require('http');
 
-// ═══ App identity ═══
+// ====== App identity ======
 app.setName('DayLife');
 app.setAppUserModelId('com.DayLife.dev');
 
-// ═══ 单实例锁：防止重复启动 ═══
+// ====== Single instance lock ======
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
-    // 已有实例在运行，直接退出
     app.quit();
 }
 
@@ -19,31 +19,91 @@ let panelWin = null;
 let fullWin = null;
 let tray = null;
 let serverProcess = null;
+let serverRestarts = 0;
+const MAX_RESTARTS = 5;
 const PORT = 8263;
 const SERVER_URL = `http://127.0.0.1:${PORT}`;
 
-// ═══ 启动后端服务 ═══
+// ====== Server log file ======
+const LOG_DIR = path.join(app.getPath('userData'), 'logs');
+function getLogStream() {
+    if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
+    const logFile = path.join(LOG_DIR, 'server.log');
+    // Rotate: if log > 2MB, rename to .old
+    try {
+        const stat = fs.statSync(logFile);
+        if (stat.size > 2 * 1024 * 1024) {
+            fs.renameSync(logFile, logFile + '.old');
+        }
+    } catch {}
+    return fs.openSync(logFile, 'a');
+}
+
+function logServer(msg) {
+    const ts = new Date().toISOString();
+    const line = `[${ts}] ${msg}\n`;
+    console.log(line.trim());
+    try {
+        fs.appendFileSync(path.join(LOG_DIR, 'server.log'), line);
+    } catch {}
+}
+
+// ====== Start backend server ======
 function startServer() {
-    // 检查服务是否已在运行
     checkServer().then(running => {
         if (running) {
-            console.log('[Server] Already running on port', PORT);
+            logServer('[Server] Already running on port ' + PORT);
             return;
         }
-        const daylifeExe = path.join(
-            process.env.APPDATA, 'Python', 'Python313', 'Scripts', 'daylife.exe'
-        );
-        serverProcess = spawn(daylifeExe, ['serve', '--port', String(PORT)], {
-            stdio: 'ignore', detached: false,
+        _spawnServer();
+    });
+}
+
+function _spawnServer() {
+    const daylifeExe = path.join(
+        process.env.APPDATA, 'Python', 'Python313', 'Scripts', 'daylife.exe'
+    );
+
+    const logFd = getLogStream();
+
+    logServer(`[Server] Starting: ${daylifeExe} serve --port ${PORT}`);
+    serverProcess = spawn(daylifeExe, ['serve', '--port', String(PORT)], {
+        stdio: ['ignore', logFd, logFd],
+        detached: false,
+    });
+
+    serverProcess.on('error', (err) => {
+        logServer(`[Server] Spawn error: ${err.message}, trying python fallback`);
+        serverProcess = spawn('python', ['-m', 'uvicorn', 'daylife.api.main:app',
+            '--host', '127.0.0.1', '--port', String(PORT)], {
+            stdio: ['ignore', logFd, logFd],
+            env: { ...process.env, PYTHONPATH: path.join(__dirname, '..', 'src') },
         });
-        serverProcess.on('error', () => {
-            serverProcess = spawn('python', ['-m', 'uvicorn', 'daylife.api.main:app',
-                '--host', '127.0.0.1', '--port', String(PORT)], {
-                stdio: 'ignore',
-                env: { ...process.env, PYTHONPATH: path.join(__dirname, '..', 'src') },
-            });
-        });
-        console.log('[Server] Started');
+        _attachExitHandler(serverProcess, logFd);
+    });
+
+    _attachExitHandler(serverProcess, logFd);
+    logServer('[Server] Process spawned, PID: ' + (serverProcess.pid || 'unknown'));
+}
+
+function _attachExitHandler(proc, logFd) {
+    proc.on('exit', (code, signal) => {
+        logServer(`[Server] Exited with code=${code} signal=${signal}`);
+        try { fs.closeSync(logFd); } catch {}
+
+        if (serverRestarts < MAX_RESTARTS) {
+            serverRestarts++;
+            const delay = Math.min(2000 * serverRestarts, 10000);
+            logServer(`[Server] Auto-restart #${serverRestarts} in ${delay}ms`);
+            setTimeout(() => {
+                checkServer().then(running => {
+                    if (!running) _spawnServer();
+                    else logServer('[Server] Already recovered');
+                });
+            }, delay);
+        } else {
+            logServer(`[Server] Max restarts (${MAX_RESTARTS}) reached, giving up`);
+        }
     });
 }
 
@@ -57,7 +117,7 @@ function checkServer() {
     });
 }
 
-// ═══ 图标 ═══
+// ====== Icon ======
 function getIconPath() {
     return path.join(__dirname, 'icon.ico');
 }
@@ -65,7 +125,7 @@ function getIcon() {
     return nativeImage.createFromPath(path.join(__dirname, 'icon.png'));
 }
 
-// ═══ 悬浮按钮（可拖动） ═══
+// ====== Float button ======
 function createFloatButton() {
     const { width, height } = screen.getPrimaryDisplay().workAreaSize;
 
@@ -86,7 +146,7 @@ function createFloatButton() {
     floatWin.on('close', e => { e.preventDefault(); floatWin.hide(); });
 }
 
-// ═══ 快捷面板（小窗口） ═══
+// ====== Quick panel ======
 function createPanel() {
     if (panelWin && !panelWin.isDestroyed()) {
         panelWin.show(); panelWin.focus(); return;
@@ -116,7 +176,7 @@ function togglePanel() {
     }
 }
 
-// ═══ 完整日历窗口（Electron 内嵌 Web） ═══
+// ====== Full calendar window ======
 function openFullWindow() {
     if (fullWin && !fullWin.isDestroyed()) {
         fullWin.show(); fullWin.focus(); return;
@@ -124,7 +184,7 @@ function openFullWindow() {
     fullWin = new BrowserWindow({
         width: 1400, height: 900,
         icon: getIconPath(),
-        title: 'DayLife - 每日记录',
+        title: 'DayLife - \u6BCF\u65E5\u8BB0\u5F55',
         webPreferences: {
             contextIsolation: false,
             nodeIntegration: false,
@@ -137,18 +197,25 @@ function openFullWindow() {
     fullWin.on('closed', () => { fullWin = null; });
 }
 
-// ═══ 系统托盘 ═══
+// ====== System tray ======
 function createTray() {
     tray = new Tray(getIcon());
-    tray.setToolTip('DayLife - 每日记录');
+    tray.setToolTip('DayLife - \u6BCF\u65E5\u8BB0\u5F55');
     tray.setContextMenu(Menu.buildFromTemplate([
-        { label: '打开面板', click: togglePanel },
-        { label: '完整日历', click: openFullWindow },
+        { label: '\u6253\u5F00\u9762\u677F', click: togglePanel },
+        { label: '\u5B8C\u6574\u65E5\u5386', click: openFullWindow },
         { type: 'separator' },
-        { label: '显示悬浮球', click: () => floatWin?.show() },
-        { label: '隐藏悬浮球', click: () => floatWin?.hide() },
+        { label: '\u663E\u793A\u60AC\u6D6E\u7403', click: () => floatWin?.show() },
+        { label: '\u9690\u85CF\u60AC\u6D6E\u7403', click: () => floatWin?.hide() },
         { type: 'separator' },
-        { label: '退出 DayLife', click: () => {
+        { label: '\u91CD\u542F\u540E\u7AEF', click: () => {
+            logServer('[Server] Manual restart requested');
+            serverRestarts = 0;
+            if (serverProcess) serverProcess.kill();
+            setTimeout(() => startServer(), 1000);
+        }},
+        { type: 'separator' },
+        { label: '\u9000\u51FA DayLife', click: () => {
             if (serverProcess) serverProcess.kill();
             app.exit(0);
         }},
@@ -157,9 +224,8 @@ function createTray() {
     tray.on('double-click', openFullWindow);
 }
 
-// ═══ Zoom support ═══
+// ====== Zoom support ======
 function enableZoom(win) {
-    // Ctrl+=/- keyboard zoom
     win.webContents.on('before-input-event', (event, input) => {
         if (input.control && input.type === 'keyDown') {
             const z = win.webContents.getZoomFactor();
@@ -172,7 +238,6 @@ function enableZoom(win) {
             }
         }
     });
-    // Ctrl+scroll zoom
     win.webContents.on('zoom-changed', (event, direction) => {
         const z = win.webContents.getZoomFactor();
         if (direction === 'in') win.webContents.setZoomFactor(Math.min(z + 0.1, 3));
@@ -180,7 +245,7 @@ function enableZoom(win) {
     });
 }
 
-// ═══ IPC ═══
+// ====== IPC ======
 ipcMain.on('toggle-panel', togglePanel);
 ipcMain.on('open-browser', openFullWindow);
 ipcMain.on('close-panel', () => panelWin?.hide());
@@ -192,7 +257,7 @@ ipcMain.on('move-float', (_, dx, dy) => {
 });
 ipcMain.handle('get-server-url', () => SERVER_URL);
 
-// ═══ 第二次启动时，激活已有窗口 ═══
+// ====== Second instance ======
 app.on('second-instance', () => {
     if (fullWin && !fullWin.isDestroyed()) {
         fullWin.show();
@@ -202,7 +267,7 @@ app.on('second-instance', () => {
     }
 });
 
-// ═══ 等待服务就绪 ═══
+// ====== Wait for server ready ======
 function waitForServer(retries = 30) {
     return new Promise((resolve) => {
         let count = 0;
@@ -218,7 +283,7 @@ function waitForServer(retries = 30) {
     });
 }
 
-// ═══ App lifecycle ═══
+// ====== App lifecycle ======
 app.whenReady().then(async () => {
     startServer();
     createTray();
@@ -226,7 +291,6 @@ app.whenReady().then(async () => {
     globalShortcut.register('Alt+D', togglePanel);
     globalShortcut.register('Alt+Shift+D', openFullWindow);
     globalShortcut.register('Alt+V', () => {
-        // 语音快捷键：打开面板并触发语音录入
         createPanel();
         setTimeout(() => {
             if (panelWin && !panelWin.isDestroyed()) {
@@ -235,12 +299,12 @@ app.whenReady().then(async () => {
         }, 500);
     });
 
-    // 等服务就绪再打开窗口
     const ok = await waitForServer();
     if (ok) {
+        logServer('[App] Server ready, opening full window');
         openFullWindow();
     } else {
-        console.log('[Error] Server failed to start');
+        logServer('[App] Server failed to start after 30 retries');
     }
 });
 

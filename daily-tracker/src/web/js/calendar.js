@@ -300,27 +300,27 @@ const Calendar = {
         grid.appendChild(mlRow);
 
         // 总览行
-        grid.appendChild(this.buildHeatmapRow(year, '总览', null, ds => (items[ds] || []).length));
+        grid.appendChild(this.buildHeatmapRow(year, '总览', null, ds => (items[ds] || []).reduce((s, i) => s + i.count, 0)));
 
         // GitHub 行
         let hasGh = false;
         for (const dayItems of Object.values(items)) {
-            if (dayItems.some(i => i.text.startsWith('[GitHub]'))) { hasGh = true; break; }
+            if (dayItems.some(i => i.cat === 'GitHub')) { hasGh = true; break; }
         }
         if (hasGh) {
             grid.appendChild(this.buildHeatmapRow(year, 'GitHub', '#8b5cf6',
-                ds => (items[ds] || []).filter(i => i.text.startsWith('[GitHub]')).length));
+                ds => (items[ds] || []).filter(i => i.cat === 'GitHub').reduce((s, i) => s + i.count, 0)));
         }
 
         // 分类行
         const catHas = {};
         for (const dayItems of Object.values(items)) {
-            dayItems.forEach(i => { if (i.category !== '其他') catHas[i.category] = true; });
+            dayItems.forEach(i => { if (i.cat !== '其他') catHas[i.cat] = true; });
         }
         this.CATEGORY_ORDER.forEach(cat => {
             if (!catHas[cat]) return;
             grid.appendChild(this.buildHeatmapRow(year, cat, this.CATEGORY_COLORS[cat],
-                ds => (items[ds] || []).filter(i => i.category === cat).length));
+                ds => (items[ds] || []).filter(i => i.cat === cat).reduce((s, i) => s + i.count, 0)));
         });
     },
 

@@ -100,19 +100,8 @@ const App = {
             el.classList.toggle('nav-active', el.dataset.nav === view);
         });
         if (view === 'stats') {
-            // ECharts 按需加载
-            if (!window.echarts) {
-                const s = document.createElement('script');
-                s.src = '/static/js/echarts.min.js';
-                s.onload = () => {
-                    this.refreshStats();
-                    Calendar.loadHeatmapYear(parseInt(document.getElementById('heatmap-year')?.value || Calendar.currentYear));
-                };
-                document.head.appendChild(s);
-            } else {
-                this.refreshStats();
-                Calendar.loadHeatmapYear(parseInt(document.getElementById('heatmap-year')?.value || Calendar.currentYear));
-            }
+            this.refreshStats();
+            Calendar.loadHeatmapYear(parseInt(document.getElementById('heatmap-year')?.value || Calendar.currentYear));
         }
         if (view === 'search') document.getElementById('search-input')?.focus();
         if (view === 'reports') this.loadReportTree();
