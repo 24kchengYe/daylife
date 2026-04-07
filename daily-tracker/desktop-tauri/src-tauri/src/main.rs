@@ -6,12 +6,14 @@
 //! - 系统托盘 + 全局快捷键
 //! - 单实例锁
 
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![windows_subsystem = "windows"]
 
 use std::process::{Child, Command};
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use tauri::{
     AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder,
     menu::{Menu, MenuItem},
@@ -43,22 +45,20 @@ fn start_server() -> Option<Child> {
         return None;
     }
 
-    // 尝试 daylife.exe
-    let appdata = std::env::var("APPDATA").unwrap_or_default();
-    let daylife_exe = format!(r"{}\Python\Python313\Scripts\daylife.exe", appdata);
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-    let child = Command::new(&daylife_exe)
-        .args(["serve", "--port", &PORT.to_string()])
+    // 用 pythonw.exe（无控制台）直接启动 uvicorn，避免弹出黑窗口
+    let child = Command::new("pythonw")
+        .args(["-m", "uvicorn", "daylife.api.main:app",
+               "--host", "127.0.0.1", "--port", &PORT.to_string()])
+        .creation_flags(CREATE_NO_WINDOW)
         .spawn()
         .or_else(|_| {
-            // 回退到 python -m uvicorn
-            let src_path = std::env::current_dir()
-                .map(|p| p.join("..").join("src"))
-                .unwrap_or_default();
+            // 回退到 python.exe
             Command::new("python")
                 .args(["-m", "uvicorn", "daylife.api.main:app",
                        "--host", "127.0.0.1", "--port", &PORT.to_string()])
-                .env("PYTHONPATH", src_path)
+                .creation_flags(CREATE_NO_WINDOW)
                 .spawn()
         })
         .ok();
@@ -134,6 +134,8 @@ fn create_float(app: &AppHandle) {
     .resizable(false)
     .skip_taskbar(true)
     .shadow(false)
+    // WebView2 环境级参数：绕过 localhost 代理（防止系统代理拦截后端请求）
+    .additional_browser_args("--proxy-bypass-list=localhost;127.0.0.1")
     .build();
 }
 
@@ -168,6 +170,10 @@ fn create_full_window(app: &AppHandle) {
 // ═══ 入口 ═══
 
 fn main() {
+    // WebView2 继承系统代理会导致 localhost 请求被拦截，强制绕过
+    std::env::set_var("NO_PROXY", "localhost,127.0.0.1");
+    std::env::set_var("no_proxy", "localhost,127.0.0.1");
+
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             // 第二次启动时激活已有窗口
